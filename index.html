@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Prana Wellness — CEO Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #F7F5F0;
+  --surface: #FFFFFF;
+  --surface-2: #F0EDE8;
+  --border: #E2DDD8;
+  --green: #2D6A4F;
+  --green-light: #EAF2EC;
+  --green-mid: #52976D;
+  --ink: #1A1A18;
+  --ink-2: #5A5A56;
+  --ink-3: #9A9A94;
+  --amber: #C17F24;
+  --amber-light: #FDF3E3;
+  --red: #B94040;
+  --red-light: #FBEAEA;
+  --yellow: #E8A020;
+  --yellow-light: #FEF6E4;
+  --display: 'DM Serif Display', Georgia, serif;
+  --body: 'DM Sans', system-ui, sans-serif;
+  --mono: 'DM Mono', monospace;
+  --radius: 8px;
+  --radius-lg: 14px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+}
+html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+body { font-family: var(--body); background: var(--bg); color: var(--ink); min-height: 100vh; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes slideIn { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:translateX(0); } }
+.fade-up { animation: fadeUp 0.45s ease both; }
+.fade-up-2 { animation: fadeUp 0.45s 0.08s ease both; }
+.fade-up-3 { animation: fadeUp 0.45s 0.16s ease both; }
+.fade-up-4 { animation: fadeUp 0.45s 0.24s ease both; }
+.fade-up-5 { animation: fadeUp 0.45s 0.32s ease both; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const { useState, useRef, useCallback, useMemo } = React;
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const EXPECTED = [
+  { key:'01_sales',                   label:'Sales Report',                group:'Revenue' },
+  { key:'02_autopay',                 label:'Autopay Report',              group:'Revenue' },
+  { key:'03_members_active',          label:'Active Members',              group:'Membership' },
+  { key:'04_members_cancelled',       label:'Cancelled Members',           group:'Membership' },
+  { key:'05_first_visit',             label:'First Visit Report',          group:'Membership' },
+  { key:'06_no_return',               label:'No Return Report',            group:'Membership' },
+  { key:'07_retention_management',    label:'Retention Management',        group:'Membership' },
+  { key:'08_retention',               label:'Retention Report',            group:'Membership' },
+  { key:'09_attendance_analysis',     label:'Attendance Analysis',         group:'Attendance' },
+  { key:'10_attendance_no_revenue',   label:'Attendance without Revenue',  group:'Attendance' },
+  { key:'11_attendance_with_revenue', label:'Attendance with Revenue',     group:'Attendance' },
+  { key:'12_class_visit',             label:'Class Visit Report',          group:'Attendance' },
+];
+const GROUPS = ['Revenue','Membership','Attendance'];
+const TARGET_MEMBERS = 800;
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+function findVal(row, keys) {
+  const rk = Object.keys(row).map(k => k.toLowerCase().trim());
+  for (const k of keys) {
+    const idx = rk.findIndex(rk => rk.includes(k));
+    if (idx !== -1) return Object.values(row)[idx];
+  }
+  return null;
+}
+function toNum(v) { if (!v) return 0; const n = parseFloat(String(v).replace(/[$,]/g,'')); return isNaN(n)?0:n; }
+function fmtC(n) { return '$'+Math.round(n).toLocaleString(); }
+function fmtPct(n) { return Math.round(n)+'%'; }
+function daysSince(dateStr) {
+  if (!dateStr) return null;
+  const parts = String(dateStr).split(/[-\/]/);
+  let d;
+  if (parts.length === 3) {
+    // try MM/DD/YYYY and YYYY-MM-DD
+    if (parts[0].length === 4) d = new Date(parts[0], parts[1]-1, parts[2]);
+    else d = new Date(parts[2], parts[0]-1, parts[1]);
+  }
+  if (!d || isNaN(d)) d = new Date(dateStr);
+  if (isNaN(d)) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+function getWeekOf() {
+  const d = new Date(); d.setDate(d.getDate() - d.getDay() + 1);
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+function downloadCSV(rows, filename) {
+  if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const csv = [headers.join(','), ...rows.map(r => headers.map(h => `"${(r[h]??'').toString().replace(/"/g,'""')}"`).join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download = filename; a.click();
+}
+
+// ─── Upload Component ─────────────────────────────────────────────────────────
+function Upload({ onReady }) {
+  const [fileMap, setFileMap] = useState({});
+  const [dragging, setDragging] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const inputRef = useRef(null);
+
+  const processFiles = useCallback(async (rawFiles) => {
+    setProcessing(true);
+    const incoming = {};
+    for (const file of rawFiles) {
+      const key = file.name.replace(/\.csv$/i,'').trim();
+      const valid = EXPECTED.some(e => e.key === key);
+      if (!valid) { incoming['__unknown__'+file.name] = {status:'unknown',rows:[],filename:file.name}; continue; }
+      try {
+        const rows = await new Promise((res,rej) => Papa.parse(file,{header:true,skipEmptyLines:true,complete:r=>res(r.data),error:rej}));
+        incoming[key] = {status:'ok',rows,filename:file.name};
+      } catch { incoming[key] = {status:'error',rows:[],filename:file.name}; }
+    }
+    setFileMap(prev => {
+      const merged = {...prev,...incoming};
+      const allOk = EXPECTED.every(e => merged[e.key]?.status==='ok');
+      if (allOk) {
+        const payload = {
+          uploadedAt: new Date().toISOString(),
+          weekOf: getWeekOf(),
+          files: Object.fromEntries(EXPECTED.map(e=>[e.key,{status:'ok',rows:merged[e.key].rows}]))
+        };
+        setTimeout(() => onReady(payload), 600);
+      }
+      return merged;
+    });
+    setProcessing(false);
+  }, [onReady]);
+
+  const loaded = EXPECTED.filter(e => fileMap[e.key]?.status==='ok').length;
+  const errors = EXPECTED.filter(e => fileMap[e.key]?.status==='error').length;
+  const unknown = Object.entries(fileMap).filter(([k]) => k.startsWith('__unknown__')).map(([,v])=>v);
+  const allReady = loaded === 12;
+
+  return React.createElement('div', {style:{maxWidth:660,margin:'0 auto',padding:'48px 24px 80px'},className:'fade-up'},
+    // Header
+    React.createElement('div', {style:{display:'flex',alignItems:'center',gap:14,marginBottom:40}},
+      React.createElement('div', {style:{width:44,height:44,borderRadius:10,background:'var(--green)',color:'#fff',fontFamily:'var(--display)',fontSize:22,display:'flex',alignItems:'center',justifyContent:'center'}}, 'P'),
+      React.createElement('div', null,
+        React.createElement('div', {style:{fontFamily:'var(--display)',fontSize:20,color:'var(--ink)'}}, 'Prana Wellness Club'),
+        React.createElement('div', {style:{fontSize:11,color:'var(--ink-3)',fontWeight:500,letterSpacing:'0.1em',textTransform:'uppercase'}}, 'CEO Dashboard')
+      )
+    ),
+    // Upload card
+    React.createElement('div', {style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:24,marginBottom:16,boxShadow:'var(--shadow)'}},
+      React.createElement('div', {style:{fontSize:10,fontWeight:600,letterSpacing:'0.12em',color:'var(--ink-3)',textTransform:'uppercase',marginBottom:16}}, 'WEEKLY REPORT UPLOAD'),
+      React.createElement('div', {
+        style:{border:`2px dashed ${allReady?'var(--green)':dragging?'var(--green)':'var(--border)}`,borderStyle:allReady?'solid':'dashed',borderRadius:'var(--radius)',padding:'40px 24px',textAlign:'center',cursor:allReady?'default':'pointer',background:allReady||dragging?'var(--green-light)':'var(--bg)',transition:'all 0.2s'},
+        onDragOver:e=>{e.preventDefault();setDragging(true)},
+        onDragLeave:()=>setDragging(false),
+        onDrop:e=>{e.preventDefault();setDragging(false);processFiles(Array.from(e.dataTransfer.files))},
+        onClick:()=>!allReady&&inputRef.current?.click()
+      },
+        React.createElement('input',{ref:inputRef,type:'file',multiple:true,accept:'.csv',style:{display:'none'},onChange:e=>processFiles(Array.from(e.target.files))}),
+        allReady
+          ? React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:8}},
+              React.createElement('div',{style:{width:48,height:48,borderRadius:'50%',background:'var(--green)',color:'#fff',fontSize:22,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:4}},'✓'),
+              React.createElement('div',{style:{fontWeight:600,fontSize:16,color:'var(--green)'}},'All 12 reports loaded'),
+              React.createElement('div',{style:{fontSize:13,color:'var(--ink-3)'}},'Building your dashboard…')
+            )
+          : processing
+          ? React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:12}},
+              React.createElement('div',{style:{width:28,height:28,border:'2.5px solid var(--border)',borderTopColor:'var(--green)',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}),
+              React.createElement('div',{style:{fontSize:14,color:'var(--ink-2)',fontWeight:500}},'Reading files…')
+            )
+          : React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:8}},
+              React.createElement('svg',{width:28,height:28,viewBox:'0 0 24 24',fill:'none',stroke:'var(--ink-3)',strokeWidth:1.5,strokeLinecap:'round',strokeLinejoin:'round'},
+                React.createElement('path',{d:'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'}),
+                React.createElement('polyline',{points:'17 8 12 3 7 8'}),
+                React.createElement('line',{x1:12,y1:3,x2:12,y2:15})
+              ),
+              React.createElement('div',{style:{fontWeight:500,fontSize:15,color:'var(--ink)'}}, loaded===0?'Drop all 12 CSV files here':`${loaded} of 12 loaded — add more`),
+              React.createElement('div',{style:{fontSize:13,color:'var(--ink-3)'}},'or click to browse · select all at once')
+            )
+      ),
+      // Progress bar
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:12,marginTop:16}},
+        React.createElement('div',{style:{flex:1,height:4,background:'var(--border)',borderRadius:2,overflow:'hidden'}},
+          React.createElement('div',{style:{height:'100%',background:'var(--green)',borderRadius:2,width:`${(loaded/12)*100}%`,transition:'width 0.4s ease'}})
+        ),
+        React.createElement('div',{style:{fontSize:12,color:'var(--ink-3)',fontFamily:'var(--mono)',whiteSpace:'nowrap'}},`${loaded} / 12`)
+      )
+    ),
+    // File groups
+    GROUPS.map(group =>
+      React.createElement('div',{key:group,style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:24,marginBottom:16,boxShadow:'var(--shadow)'}},
+        React.createElement('div',{style:{fontSize:10,fontWeight:600,letterSpacing:'0.12em',color:'var(--ink-3)',textTransform:'uppercase',marginBottom:12}},group.toUpperCase()),
+        React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:3}},
+          EXPECTED.filter(e=>e.group===group).map(({key,label}) => {
+            const entry = fileMap[key];
+            const status = entry?.status ?? 'waiting';
+            return React.createElement('div',{key,style:{display:'flex',alignItems:'center',gap:10,padding:'7px 10px',borderRadius:6,background:status==='ok'?'var(--green-light)':status==='error'?'var(--red-light)':'transparent'}},
+              React.createElement('span',{style:{width:8,height:8,borderRadius:'50%',flexShrink:0,display:'inline-block',background:status==='ok'?'var(--green)':status==='error'?'var(--red)':'transparent',border:status==='waiting'?'1.5px dashed var(--ink-3)':'none'}}),
+              React.createElement('div',{style:{fontWeight:500,fontSize:13,color:'var(--ink)',flex:1}},label),
+              React.createElement('div',{style:{fontFamily:'var(--mono)',fontSize:11,color:'var(--ink-3)'}},key+'.csv'),
+              status==='ok'&&React.createElement('div',{style:{fontFamily:'var(--mono)',fontSize:11,color:'var(--green)',marginLeft:4}},entry.rows.length+' rows'),
+              status==='error'&&React.createElement('div',{style:{fontFamily:'var(--mono)',fontSize:11,color:'var(--red)'}}, 'parse error')
+            )
+          })
+        )
+      )
+    ),
+    // Warnings
+    unknown.length>0&&React.createElement('div',{style:{background:'var(--amber-light)',border:'1px solid var(--amber)',borderRadius:'var(--radius)',padding:'16px 20px',marginBottom:16}},
+      React.createElement('div',{style:{fontWeight:600,fontSize:13,color:'var(--amber)',marginBottom:8}},'⚠ Unrecognised files — not loaded'),
+      unknown.map(f=>React.createElement('div',{key:f.filename,style:{fontFamily:'var(--mono)',fontSize:12,color:'var(--ink-2)',marginBottom:2}},f.filename)),
+      React.createElement('div',{style:{fontSize:12,color:'var(--ink-3)',marginTop:8}},'Check filenames match exactly — see the report guide.')
+    ),
+    errors>0&&React.createElement('div',{style:{background:'var(--red-light)',border:'1px solid var(--red)',borderRadius:'var(--radius)',padding:'16px 20px'}},
+      React.createElement('div',{style:{fontWeight:600,fontSize:13,color:'var(--red)',marginBottom:4}},`✕ ${errors} file${errors>1?'s':''} failed to parse`),
+      React.createElement('div',{style:{fontSize:12,color:'var(--ink-3)'}},'Re-export from Mindbody as CSV and re-upload.')
+    )
+  );
+}
+
+// ─── Metric Card ──────────────────────────────────────────────────────────────
+function MetricCard({ label, value, sub, accent, className }) {
+  return React.createElement('div',{className,style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'20px 22px',boxShadow:'var(--shadow)'}},
+    React.createElement('div',{style:{fontSize:10,fontWeight:600,letterSpacing:'0.12em',color:'var(--ink-3)',textTransform:'uppercase',marginBottom:10}},label),
+    React.createElement('div',{style:{fontFamily:'var(--display)',fontSize:30,color:accent||'var(--ink)',lineHeight:1.1}},value),
+    sub&&React.createElement('div',{style:{fontSize:12,color:'var(--ink-3)',marginTop:6}},sub)
+  );
+}
+
+// ─── Section Header ───────────────────────────────────────────────────────────
+function SectionHeader({ title, sub }) {
+  return React.createElement('div',{style:{marginBottom:20}},
+    React.createElement('div',{style:{fontFamily:'var(--display)',fontSize:22,color:'var(--ink)'}},title),
+    sub&&React.createElement('div',{style:{fontSize:13,color:'var(--ink-3)',marginTop:3}},sub)
+  );
+}
+
+// ─── Revenue Panel ────────────────────────────────────────────────────────────
+function RevenuePanel({ files }) {
+  const sales   = files['01_sales']?.rows ?? [];
+  const autopay = files['02_autopay']?.rows ?? [];
+  const members = files['03_members_active']?.rows ?? [];
+
+  const totalRevenue = useMemo(() => sales.reduce((s,r) => {
+    const v = toNum(findVal(r,['total','amount','sale total','price','revenue','net']));
+    return s + v;
+  }, 0), [sales]);
+
+  const mrr = useMemo(() => autopay.reduce((s,r) => {
+    const v = toNum(findVal(r,['payment amount','amount','autopay amount','price','monthly']));
+    return s + v;
+  }, 0), [autopay]);
+
+  const packRevenue = useMemo(() => sales.reduce((s,r) => {
+    const type = (findVal(r,['sale type','type','item type','category','pricing option type','description'])||'').toLowerCase();
+    if (type.includes('membership')||type.includes('autopay')||type.includes('recurring')) return s;
+    const v = toNum(findVal(r,['total','amount','sale total','price','revenue']));
+    return s + v;
+  }, 0), [sales]);
+
+  const activeCount = members.length || 1;
+  const revenuePerMember = totalRevenue / activeCount;
+  const mrrPct = totalRevenue > 0 ? Math.round((mrr / totalRevenue) * 100) : 0;
+
+  return React.createElement('div', {style:{marginBottom:40}},
+    React.createElement(SectionHeader,{title:'Revenue',sub:`Week of ${getWeekOf()}`}),
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:14}},
+      React.createElement(MetricCard,{className:'fade-up',  label:'Total Weekly Revenue', value:fmtC(totalRevenue), sub:'All revenue this week'}),
+      React.createElement(MetricCard,{className:'fade-up-2',label:'MRR — Recurring Only',   value:fmtC(mrr),          sub:`${mrrPct}% of total · target >70%`, accent:mrrPct>=70?'var(--green)':'var(--amber)'}),
+      React.createElement(MetricCard,{className:'fade-up-3',label:'Pack & Class Revenue',   value:fmtC(packRevenue),  sub:'Non-membership sales'}),
+      React.createElement(MetricCard,{className:'fade-up-4',label:'Revenue per Member',     value:fmtC(revenuePerMember), sub:`Across ${activeCount} active members`})
+    )
+  );
+}
+
+// ─── Membership Panel ─────────────────────────────────────────────────────────
+function MembershipPanel({ files }) {
+  const active    = files['03_members_active']?.rows    ?? [];
+  const cancelled = files['04_members_cancelled']?.rows ?? [];
+  const firstVisit= files['05_first_visit']?.rows       ?? [];
+  const retention = files['08_retention']?.rows         ?? [];
+
+  const activeCount    = active.length;
+  const newMembers     = firstVisit.length;
+  const churned        = cancelled.length;
+  const netGrowth      = newMembers - churned;
+  const churnRate      = activeCount > 0 ? ((churned / activeCount) * 100).toFixed(1) : '0.0';
+  const targetPct      = Math.min(Math.round((activeCount / TARGET_MEMBERS) * 100), 100);
+
+  // Retention: clients who came back after first visit
+  const retained = retention.filter(r => {
+    const visits = toNum(findVal(r,['visits','total visits','visit count','num visits']));
+    return visits > 1;
+  }).length;
+  const retentionRate = firstVisit.length > 0 ? Math.round((retained / Math.max(firstVisit.length,1)) * 100) : null;
+
+  return React.createElement('div',{style:{marginBottom:40}},
+    React.createElement(SectionHeader,{title:'Membership',sub:'Growth, churn & conversion'}),
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:14,marginBottom:16}},
+      React.createElement(MetricCard,{className:'fade-up',  label:'Active Members',    value:activeCount, sub:`Target: ${TARGET_MEMBERS}`}),
+      React.createElement(MetricCard,{className:'fade-up-2',label:'New This Week',      value:newMembers,  sub:'First-time members'}),
+      React.createElement(MetricCard,{className:'fade-up-3',label:'Churned This Week',  value:churned,     sub:`${churnRate}% churn rate`, accent:churned>0?'var(--red)':undefined}),
+      React.createElement(MetricCard,{className:'fade-up-4',label:'Net Growth',         value:(netGrowth>0?'+':'')+netGrowth, sub:'New minus churned', accent:netGrowth>0?'var(--green)':netGrowth<0?'var(--red)':undefined}),
+    ),
+    // Progress to 800
+    React.createElement('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'20px 22px',boxShadow:'var(--shadow)',marginBottom:14}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}},
+        React.createElement('div',{style:{fontSize:10,fontWeight:600,letterSpacing:'0.12em',color:'var(--ink-3)',textTransform:'uppercase'}},'Progress to Full Capacity'),
+        React.createElement('div',{style:{fontFamily:'var(--mono)',fontSize:12,color:'var(--green)'}},`${activeCount} / ${TARGET_MEMBERS}`)
+      ),
+      React.createElement('div',{style:{height:8,background:'var(--border)',borderRadius:4,overflow:'hidden'}},
+        React.createElement('div',{style:{height:'100%',background:'var(--green)',borderRadius:4,width:targetPct+'%',transition:'width 0.6s ease'}})
+      ),
+      React.createElement('div',{style:{fontSize:12,color:'var(--ink-3)',marginTop:8}},`${TARGET_MEMBERS - activeCount} members to go · ${targetPct}% full`)
+    ),
+    retentionRate!==null&&React.createElement(MetricCard,{className:'fade-up',label:'New Client Retention Rate', value:fmtPct(retentionRate), sub:'% of new clients who returned', accent:retentionRate>=50?'var(--green)':'var(--amber)'})
+  );
+}
+
+// ─── Dorian's Action List ─────────────────────────────────────────────────────
+function ActionPanel({ files }) {
+  const noReturn  = files['06_no_return']?.rows           ?? [];
+  const retMgmt   = files['07_retention_management']?.rows ?? [];
+  const cancelled = files['04_members_cancelled']?.rows    ?? [];
+  const [filter, setFilter] = useState('all');
+
+  // Build enriched at-risk list from no-return + retention management
+  const atRisk = useMemo(() => {
+    const mgmtMap = {};
+    retMgmt.forEach(r => {
+      const name = (findVal(r,['client','name','full name','first name','client name'])||'').trim();
+      if (name) mgmtMap[name.toLowerCase()] = r;
+    });
+
+    return noReturn.map(r => {
+      const name     = (findVal(r,['client','name','full name','first name','client name'])||'Unknown').trim();
+      const email    = findVal(r,['email','email address'])||'';
+      const phone    = findVal(r,['mobile','phone','phone number','mobile phone'])||'';
+      const membership = findVal(r,['membership','pricing option','membership type','type'])||'';
+      const lastVisitRaw = findVal(r,['last visit','last visit date','last appointment','last class date','date']);
+      const days     = daysSince(lastVisitRaw) ?? 0;
+      const mgmt     = mgmtMap[name.toLowerCase()] || {};
+      const lifetimeVisits = toNum(findVal(mgmt,['visits ytd','visits year to date','total visits','visits','visit count','visits 365']));
+      const memberSince    = findVal(mgmt,['join date','member since','start date','date joined'])||'';
+      const tier = days >= 30 ? 'lost' : days >= 14 ? 'critical' : 'watch';
+      return { name, email, phone, membership, lastVisitRaw, days, lifetimeVisits, memberSince, tier };
+    }).sort((a,b) => b.days - a.days);
+  }, [noReturn, retMgmt]);
+
+  // Win-back list from cancelled
+  const winBack = useMemo(() => cancelled.map(r => ({
+    name:       (findVal(r,['client','name','full name','first name','client name'])||'Unknown').trim(),
+    email:      findVal(r,['email','email address'])||'',
+    phone:      findVal(r,['mobile','phone','phone number'])||'',
+    membership: findVal(r,['membership','pricing option','type'])||'',
+    cancelDate: findVal(r,['cancel date','cancellation date','end date','date'])||'',
+  })), [cancelled]);
+
+  const critical = atRisk.filter(m=>m.tier==='critical');
+  const watch    = atRisk.filter(m=>m.tier==='watch');
+  const lost     = atRisk.filter(m=>m.tier==='lost');
+  const shown    = filter==='all'?atRisk : filter==='critical'?critical : filter==='watch'?watch : filter==='lost'?lost : winBack;
+
+  const tiers = [
+    { key:'all',      label:`All at-risk (${atRisk.length})`,     color:'var(--ink-2)' },
+    { key:'critical', label:`🔴 Critical (${critical.length})`,    color:'var(--red)'  },
+    { key:'watch',    label:`🟡 Watch (${watch.length})`,          color:'var(--amber)' },
+    { key:'lost',     label:`⚫ Lost (${lost.length})`,            color:'var(--ink-3)' },
+    { key:'winback',  label:`♻ Win-Back (${winBack.length})`,     color:'var(--green)' },
+  ];
+
+  function handleDownload() {
+    const rows = (filter==='winback'?winBack:shown).map(m => ({
+      'Name': m.name,
+      'Email': m.email,
+      'Phone': m.phone,
+      'Membership': m.membership,
+      'Last Visit': m.lastVisitRaw||m.cancelDate||'',
+      'Days Since Visit': m.days||'',
+      'Lifetime Visits': m.lifetimeVisits||'',
+      'Member Since': m.memberSince||'',
+      'Priority': m.tier ? m.tier.charAt(0).toUpperCase()+m.tier.slice(1) : 'Win-Back',
+    }));
+    downloadCSV(rows, `dorian-action-list-${filter}-${new Date().toISOString().split('T')[0]}.csv`);
+  }
+
+  const tierColor = (tier) => tier==='critical'?'var(--red)':tier==='watch'?'var(--amber)':'var(--ink-3)';
+  const tierBg    = (tier) => tier==='critical'?'var(--red-light)':tier==='watch'?'var(--yellow-light)':'var(--surface-2)';
+
+  return React.createElement('div',{style:{marginBottom:40}},
+    React.createElement('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:20,flexWrap:'wrap',gap:12}},
+      React.createElement(SectionHeader,{title:"Dorian's Action List",sub:'Members to contact this week — download and send'}),
+      React.createElement('button',{
+        onClick:handleDownload,
+        style:{padding:'8px 16px',background:'var(--green)',color:'#fff',border:'none',borderRadius:6,fontSize:13,fontWeight:500,cursor:'pointer',fontFamily:'var(--body)',whiteSpace:'nowrap'}
+      },'⬇ Download CSV')
+    ),
+    // Filter tabs
+    React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}},
+      tiers.map(t => React.createElement('button',{
+        key:t.key,
+        onClick:()=>setFilter(t.key),
+        style:{padding:'6px 14px',borderRadius:20,border:`1px solid ${filter===t.key?t.color:'var(--border)'}`,background:filter===t.key?'var(--surface)':'transparent',color:filter===t.key?t.color:'var(--ink-3)',fontSize:12,fontWeight:500,cursor:'pointer',fontFamily:'var(--body)',transition:'all 0.15s'}
+      },t.label))
+    ),
+    // Member cards
+    shown.length === 0
+      ? React.createElement('div',{style:{padding:'32px',textAlign:'center',color:'var(--ink-3)',fontSize:13,border:'1px dashed var(--border)',borderRadius:'var(--radius-lg)'}}, filter==='winback'?'No cancellations this week.':'No members in this category.')
+      : React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
+          (filter==='winback'?winBack:shown).map((m,i) =>
+            React.createElement('div',{key:i,style:{background:filter==='winback'?'var(--green-light)':tierBg(m.tier),border:`1px solid var(--border)`,borderLeft:`3px solid ${filter==='winback'?'var(--green)':tierColor(m.tier)}`,borderRadius:'var(--radius)',padding:'14px 16px',animation:`slideIn 0.3s ${i*0.03}s ease both`}},
+              React.createElement('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,flexWrap:'wrap'}},
+                React.createElement('div',null,
+                  React.createElement('div',{style:{fontWeight:600,fontSize:14,color:'var(--ink)',marginBottom:3}},m.name),
+                  React.createElement('div',{style:{fontSize:12,color:'var(--ink-3)'}},
+                    [m.membership, m.email, m.phone].filter(Boolean).join(' · ')
+                  )
+                ),
+                React.createElement('div',{style:{textAlign:'right',flexShrink:0}},
+                  filter!=='winback'&&React.createElement('div',{style:{fontFamily:'var(--mono)',fontSize:13,fontWeight:500,color:tierColor(m.tier)}}, m.days>0?`${m.days}d ago`:''),
+                  filter!=='winback'&&m.lifetimeVisits>0&&React.createElement('div',{style:{fontSize:11,color:'var(--ink-3)',marginTop:2}},`${m.lifetimeVisits} lifetime visits`),
+                  filter==='winback'&&m.cancelDate&&React.createElement('div',{style:{fontSize:12,color:'var(--ink-3)'}},'Cancelled: '+m.cancelDate)
+                )
+              )
+            )
+          )
+        )
+  );
+}
+
+// ─── Attendance Panel ─────────────────────────────────────────────────────────
+function AttendancePanel({ files }) {
+  const analysis   = files['09_attendance_analysis']?.rows    ?? [];
+  const noRev      = files['10_attendance_no_revenue']?.rows   ?? [];
+  const withRev    = files['11_attendance_with_revenue']?.rows ?? [];
+  const classVisit = files['12_class_visit']?.rows             ?? [];
+
+  // Overall fill rate
+  const fillRate = useMemo(() => {
+    const rows = analysis.length ? analysis : withRev;
+    if (!rows.length) return null;
+    const rates = rows.map(r => {
+      const booked   = toNum(findVal(r,['total booked','booked','bookings','signed in','attended','visits']));
+      const capacity = toNum(findVal(r,['capacity','max capacity','max clients','class size','maximum']));
+      return capacity > 0 ? (booked / capacity) * 100 : null;
+    }).filter(v => v !== null);
+    if (!rates.length) return null;
+    return Math.round(rates.reduce((a,b)=>a+b,0) / rates.length);
+  }, [analysis, withRev]);
+
+  // Total visits
+  const totalVisits = useMemo(() => {
+    const rows = classVisit.length ? classVisit : withRev;
+    return rows.reduce((s,r) => s + toNum(findVal(r,['visits','total visits','attended','signed in','count','bookings'])), 0);
+  }, [classVisit, withRev]);
+
+  // Class performance — aggregate by class name
+  const classPerf = useMemo(() => {
+    const rows = analysis.length ? analysis : withRev;
+    const map = {};
+    rows.forEach(r => {
+      const name = (findVal(r,['class name','service name','class','service','session','name'])||'Unknown').trim();
+      const booked   = toNum(findVal(r,['total booked','booked','bookings','attended','signed in','visits']));
+      const capacity = toNum(findVal(r,['capacity','max capacity','max clients','class size','maximum']));
+      if (!map[name]) map[name] = {name, totalBooked:0, totalCapacity:0, sessions:0};
+      map[name].totalBooked    += booked;
+      map[name].totalCapacity  += capacity;
+      map[name].sessions       += 1;
+    });
+    return Object.values(map)
+      .filter(c => c.totalBooked > 0)
+      .map(c => ({...c, fillRate: c.totalCapacity>0 ? Math.round((c.totalBooked/c.totalCapacity)*100) : null}))
+      .sort((a,b) => b.totalBooked - a.totalBooked);
+  }, [analysis, withRev]);
+
+  // No-show rate
+  const noShowRate = useMemo(() => {
+    if (!noRev.length) return null;
+    const noShows  = noRev.filter(r => (findVal(r,['status','visit status','type'])||'').toLowerCase().includes('no')).length;
+    return noRev.length > 0 ? Math.round((noShows/noRev.length)*100) : null;
+  }, [noRev]);
+
+  const top3    = classPerf.slice(0,3);
+  const bottom3 = [...classPerf].sort((a,b)=>a.totalBooked-b.totalBooked).slice(0,3);
+
+  return React.createElement('div',{style:{marginBottom:40}},
+    React.createElement(SectionHeader,{title:'Attendance & Classes',sub:'Fill rate, performance and no-shows'}),
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:14,marginBottom:20}},
+      fillRate!==null&&React.createElement(MetricCard,{className:'fade-up',  label:'Avg Class Fill Rate', value:fmtPct(fillRate),  sub:'Across all classes this week', accent:fillRate>=70?'var(--green)':fillRate>=50?'var(--amber)':'var(--red)'}),
+      React.createElement(MetricCard,{className:'fade-up-2',label:'Total Visits',      value:totalVisits.toLocaleString(), sub:'Check-ins this week'}),
+      noShowRate!==null&&React.createElement(MetricCard,{className:'fade-up-3',label:'No-Show Rate', value:fmtPct(noShowRate), sub:'Paid but didn\'t attend', accent:noShowRate>15?'var(--red)':noShowRate>8?'var(--amber)':'var(--green)'})
+    ),
+    classPerf.length > 0 && React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}},
+      // Top classes
+      React.createElement('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'20px 22px',boxShadow:'var(--shadow)'}},
+        React.createElement('div',{style:{fontSize:10,fontWeight:600,letterSpacing:'0.12em',color:'var(--ink-3)',textTransform:'uppercase',marginBottom:14}},'Top Classes This Week'),
+        top3.map((c,i) => React.createElement('div',{key:c.name,style:{display:'flex',alignItems:'center',gap:10,marginBottom:i<2?10:0}},
+          React.createElement('div',{style:{width:24,height:24,borderRadius:'50%',background:'var(--green-light)',color:'var(--green)',fontSize:11,fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}},i+1),
+          React.createElement('div',{style:{flex:1}},
+            React.createElement('div',{style:{fontSize:13,fontWeight:500,color:'var(--ink)'}},c.name),
+            React.createElement('div',{style:{fontSize:11,color:'var(--ink-3)'}},`${c.totalBooked} visits${c.fillRate!==null?' · '+c.fillRate+'% full':''}`)
+          )
+        ))
+      ),
+      // Bottom classes
+      React.createElement('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'20px 22px',boxShadow:'var(--shadow)'}},
+        React.createElement('div',{style:{fontSize:10,fontWeight:600,letterSpacing:'0.12em',color:'var(--ink-3)',textTransform:'uppercase',marginBottom:14}},'Lowest Attendance'),
+        bottom3.map((c,i) => React.createElement('div',{key:c.name,style:{display:'flex',alignItems:'center',gap:10,marginBottom:i<2?10:0}},
+          React.createElement('div',{style:{width:24,height:24,borderRadius:'50%',background:'var(--red-light)',color:'var(--red)',fontSize:11,fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}},i+1),
+          React.createElement('div',{style:{flex:1}},
+            React.createElement('div',{style:{fontSize:13,fontWeight:500,color:'var(--ink)'}},c.name),
+            React.createElement('div',{style:{fontSize:11,color:'var(--ink-3)'}},`${c.totalBooked} visits${c.fillRate!==null?' · '+c.fillRate+'% full':''}`)
+          )
+        ))
+      )
+    )
+  );
+}
+
+// ─── Intelligence Panel ───────────────────────────────────────────────────────
+function IntelligencePanel({ data }) {
+  const [insights, setInsights] = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
+
+  async function generate() {
+    setLoading(true); setError(null);
+    try {
+      const summary = buildSummary(data);
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          model:'claude-sonnet-4-20250514',
+          max_tokens:1000,
+          system:`You are the business intelligence engine for Prana Wellness Club, a boutique fitness studio in Austin. You receive a weekly data summary and produce a tight, tactical CEO briefing. Be direct and specific. No fluff. Use real numbers from the data.`,
+          messages:[{role:'user',content:`Here is the weekly business data summary for Prana Wellness Club:\n\n${summary}\n\nRespond ONLY with a JSON object (no markdown, no backticks) with this exact structure:\n{"headline":"one sentence summary of the week","actions":["action 1","action 2","action 3"],"risk":"the one thing most likely to hurt the business if ignored this week","bright_spot":"one thing that is working well and could be doubled down on"}`}]
+        })
+      });
+      const d = await res.json();
+      const text = d.content?.find(b=>b.type==='text')?.text || '';
+      const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
+      setInsights(parsed);
+    } catch(e) { setError('Could not generate insights. Check your API key or try again.'); }
+    setLoading(false);
+  }
+
+  return React.createElement('div',{style:{marginBottom:40}},
+    React.createElement('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:20,flexWrap:'wrap',gap:12}},
+      React.createElement(SectionHeader,{title:'Weekly Intelligence',sub:'AI-generated tactical briefing'}),
+      !insights&&React.createElement('button',{
+        onClick:generate,disabled:loading,
+        style:{padding:'8px 18px',background:loading?'var(--surface)':'var(--ink)',color:loading?'var(--ink-3)':'#fff',border:'1px solid var(--border)',borderRadius:6,fontSize:13,fontWeight:500,cursor:loading?'default':'pointer',fontFamily:'var(--body)',display:'flex',alignItems:'center',gap:8}
+      }, loading?React.createElement(React.Fragment,null,React.createElement('div',{style:{width:14,height:14,border:'2px solid var(--border)',borderTopColor:'var(--ink-2)',borderRadius:'50%',animation:'spin 0.7s linear infinite'}}),'Analysing…'):'Generate Insights')
+    ),
+    error&&React.createElement('div',{style:{padding:'14px 18px',background:'var(--red-light)',border:'1px solid var(--red)',borderRadius:'var(--radius)',fontSize:13,color:'var(--red)',marginBottom:16}},error),
+    !insights&&!loading&&React.createElement('div',{style:{border:'1px dashed var(--border)',borderRadius:'var(--radius-lg)',padding:'40px 32px',textAlign:'center'}},
+      React.createElement('div',{style:{fontFamily:'var(--display)',fontSize:18,color:'var(--ink)',marginBottom:6}},'Ready to analyse'),
+      React.createElement('div',{style:{fontSize:13,color:'var(--ink-3)',maxWidth:340,margin:'0 auto'}},'Click Generate Insights to get your tactical briefing — top 3 actions, one risk, one bright spot.')
+    ),
+    insights&&React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:14}},
+      // Headline
+      React.createElement('div',{style:{background:'var(--ink)',borderRadius:'var(--radius-lg)',padding:'22px 26px'}},
+        React.createElement('div',{style:{fontSize:10,fontWeight:600,letterSpacing:'0.12em',color:'rgba(255,255,255,0.4)',textTransform:'uppercase',marginBottom:10}},'THIS WEEK'),
+        React.createElement('div',{style:{fontFamily:'var(--display)',fontSize:20,color:'#fff',lineHeight:1.4}},insights.headline)
+      ),
+      // Actions
+      React.createElement('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'20px 22px',boxShadow:'var(--shadow)'}},
+        React.createElement('div',{style:{fontSize:10,fontWeight:600,letterSpacing:'0.12em',color:'var(--ink-3)',textTransform:'uppercase',marginBottom:14}},'TOP 3 ACTIONS'),
+        insights.actions.map((a,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:12,marginBottom:i<2?12:0}},
+          React.createElement('div',{style:{width:24,height:24,borderRadius:'50%',background:'var(--green)',color:'#fff',fontSize:12,fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:1}},i+1),
+          React.createElement('div',{style:{fontSize:14,color:'var(--ink)',lineHeight:1.5}},a)
+        ))
+      ),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}},
+        React.createElement('div',{style:{background:'var(--red-light)',border:'1px solid var(--red)',borderRadius:'var(--radius-lg)',padding:'18px 20px'}},
+          React.createElement('div',{style:{fontSize:10,fontWeight:600,letterSpacing:'0.12em',color:'var(--red)',textTransform:'uppercase',marginBottom:10}},'⚠ Risk Flag'),
+          React.createElement('div',{style:{fontSize:14,color:'var(--ink)',lineHeight:1.5}},insights.risk)
+        ),
+        React.createElement('div',{style:{background:'var(--green-light)',border:'1px solid var(--green)',borderRadius:'var(--radius-lg)',padding:'18px 20px'}},
+          React.createElement('div',{style:{fontSize:10,fontWeight:600,letterSpacing:'0.12em',color:'var(--green)',textTransform:'uppercase',marginBottom:10}},'✦ Bright Spot'),
+          React.createElement('div',{style:{fontSize:14,color:'var(--ink)',lineHeight:1.5}},insights.bright_spot)
+        )
+      ),
+      React.createElement('button',{
+        onClick:()=>setInsights(null),
+        style:{alignSelf:'flex-start',padding:'6px 14px',border:'1px solid var(--border)',borderRadius:6,background:'transparent',fontSize:12,color:'var(--ink-3)',cursor:'pointer',fontFamily:'var(--body)'}
+      },'Regenerate')
+    )
+  );
+}
+
+// ─── Summary builder for AI ───────────────────────────────────────────────────
+function buildSummary(data) {
+  const f = data.files;
+  const lines = [];
+  lines.push(`Week of: ${data.weekOf}`);
+  lines.push(`Active members: ${f['03_members_active']?.rows?.length ?? 'N/A'}`);
+  lines.push(`New members: ${f['05_first_visit']?.rows?.length ?? 'N/A'}`);
+  lines.push(`Cancellations: ${f['04_members_cancelled']?.rows?.length ?? 'N/A'}`);
+  lines.push(`At-risk (no visit 14+ days): ${f['06_no_return']?.rows?.length ?? 'N/A'}`);
+  const totalRev = f['01_sales']?.rows?.reduce((s,r)=>s+toNum(findVal(r,['total','amount','sale total','price','revenue'])),0)??0;
+  lines.push(`Total weekly revenue: $${Math.round(totalRev).toLocaleString()}`);
+  const autopayRev = f['02_autopay']?.rows?.reduce((s,r)=>s+toNum(findVal(r,['payment amount','amount','price'])),0)??0;
+  lines.push(`MRR (autopay): $${Math.round(autopayRev).toLocaleString()}`);
+  const classRows = (f['09_attendance_analysis']?.rows??[]).concat(f['11_attendance_with_revenue']?.rows??[]);
+  if (classRows.length) {
+    const byClass = {};
+    classRows.forEach(r => {
+      const name = (findVal(r,['class name','service name','class','service','name'])||'Unknown').trim();
+      const visits = toNum(findVal(r,['total booked','booked','attended','visits']));
+      byClass[name] = (byClass[name]||0) + visits;
+    });
+    const sorted = Object.entries(byClass).sort((a,b)=>b[1]-a[1]);
+    if (sorted.length) lines.push(`Top class: ${sorted[0][0]} (${sorted[0][1]} visits)`);
+    if (sorted.length>1) lines.push(`Lowest class: ${sorted[sorted.length-1][0]} (${sorted[sorted.length-1][1]} visits)`);
+  }
+  return lines.join('\n');
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+function Dashboard({ data, onReset }) {
+  return React.createElement('div',{style:{maxWidth:1100,margin:'0 auto',padding:'40px 32px 80px'},className:'fade-up'},
+    // Header
+    React.createElement('div',{style:{display:'flex',alignItems:'center',gap:14,marginBottom:48,paddingBottom:24,borderBottom:'1px solid var(--border)'}},
+      React.createElement('div',{style:{width:44,height:44,borderRadius:10,background:'var(--green)',color:'#fff',fontFamily:'var(--display)',fontSize:22,display:'flex',alignItems:'center',justifyContent:'center'}},'P'),
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontFamily:'var(--display)',fontSize:20,color:'var(--ink)'}},'Prana Wellness Club'),
+        React.createElement('div',{style:{fontSize:11,color:'var(--ink-3)',fontWeight:500,letterSpacing:'0.1em',textTransform:'uppercase'}},`Week of ${data.weekOf}`)
+      ),
+      React.createElement('button',{
+        onClick:onReset,
+        style:{marginLeft:'auto',padding:'8px 16px',border:'1px solid var(--border)',borderRadius:6,background:'transparent',fontSize:13,color:'var(--ink-2)',cursor:'pointer',fontFamily:'var(--body)'}
+      },'↑ Upload new week')
+    ),
+    React.createElement(IntelligencePanel,{data}),
+    React.createElement('div',{style:{height:1,background:'var(--border)',marginBottom:40}}),
+    React.createElement(RevenuePanel,   {files:data.files}),
+    React.createElement('div',{style:{height:1,background:'var(--border)',marginBottom:40}}),
+    React.createElement(MembershipPanel,{files:data.files}),
+    React.createElement('div',{style:{height:1,background:'var(--border)',marginBottom:40}}),
+    React.createElement(ActionPanel,    {files:data.files}),
+    React.createElement('div',{style:{height:1,background:'var(--border)',marginBottom:40}}),
+    React.createElement(AttendancePanel,{files:data.files})
+  );
+}
+
+// ─── App root ─────────────────────────────────────────────────────────────────
+function App() {
+  const [data, setData] = useState(null);
+  return data
+    ? React.createElement(Dashboard,{data,onReset:()=>setData(null)})
+    : React.createElement(Upload,{onReady:setData});
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
