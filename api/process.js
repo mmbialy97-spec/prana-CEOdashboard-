@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     result.uploaded_at = new Date().toISOString();
 
     // 2. Save to Google Sheets via Apps Script
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxk8eTyloZg9UIfM5cZ32FxPecqZWgH0lqXEOJzKGsJJ_qWBhXDQe0EkQk8Gtzwk4I4/exec';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyyqmSW4DM178V3C9W1H4Isnhh_t8bhwo1V1yLVjpAzvdSeoXaHIhkpcqfHjQjbfe-K/exec';
 
     const saveUrl = APPS_SCRIPT_URL +
       '?action=save&week_of=' + encodeURIComponent(data.week_of) +
