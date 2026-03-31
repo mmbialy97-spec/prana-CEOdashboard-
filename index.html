@@ -391,10 +391,10 @@ function renderDashboard() {
     <div style="margin-bottom:40px">
       ${sectionHeader('Revenue', 'Week of ' + (c.week_of||''))}
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px">
-        ${metricCard('Total Weekly Revenue', fmtC(r.total_weekly), null)}
-        ${metricCard('MRR — Recurring Only', fmtC(r.mrr), fmtPct(r.mrr_pct) + ' of total · target >70%', r.mrr_pct >= 70 ? 'var(--green)' : 'var(--amber)')}
-        ${metricCard('Pack & Class Revenue', fmtC(r.pack_and_class), 'Non-membership sales')}
-        ${metricCard('Revenue per Member', fmtC(r.revenue_per_member), 'Across ' + m.active_count + ' active members')}
+        ${metricCard('Weekly Sales Revenue', fmtC(r.total_weekly), 'Non-recurring sales this week')}
+        ${metricCard('MRR — Monthly Recurring', fmtC(r.mrr), 'Autopay memberships this month')}
+        ${metricCard('Forecasted ARR', fmtC(r.mrr * 12), 'MRR × 12', 'var(--green)')}
+        ${metricCard('Revenue per Member', fmtC(r.revenue_per_member), 'MRR ÷ ' + m.active_count + ' active members')}
       </div>
     </div>
 
@@ -615,108 +615,140 @@ async function processRawFiles(rawFiles) {
 
 // ─── Pre-aggregate before sending ────────────────────────────────
 function aggregateData() {
-  const fm = state.fileMap;
+  const fm  = state.fileMap;
   const get = key => fm[key]?.rows ?? [];
 
-  // Helper to find a value from a row by possible column name variants
-  function val(row, keys) {
-    const rk = Object.keys(row).map(k => k.toLowerCase().trim());
-    for (const k of keys) {
-      const idx = rk.findIndex(r => r.includes(k));
-      if (idx !== -1) return Object.values(row)[idx];
-    }
-    return null;
-  }
-
+  // Strip commas and $ from numbers
   function toNum(v) {
     if (!v) return 0;
     const n = parseFloat(String(v).replace(/[$,]/g,''));
     return isNaN(n) ? 0 : n;
   }
 
-  const salesRows   = get('01_sales');
-  const autopayRows = get('02_autopay');
-  const activeRows  = get('03_members_active');
-  const cancelRows  = get('04_members_cancelled');
-  const firstRows   = get('05_first_visit');
-  const noReturnRows= get('06_no_return');
-  const retMgmtRows = get('07_retention_management');
-  const attendRows  = get('09_attendance_analysis').concat(get('11_attendance_with_revenue'));
-  const classRows   = get('12_class_visit');
+  // Fix Mindbody "Last, First" name format → "First Last"
+  function fixName(raw) {
+    if (!raw) return '';
+    const s = String(raw).replace(/"/g,'').trim();
+    if (s.includes(',')) {
+      const parts = s.split(',');
+      return (parts[1]||'').trim() + ' ' + (parts[0]||'').trim();
+    }
+    return s;
+  }
 
-  // Week of — Monday of current week
+  // Week start = 7 days ago
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - 7);
+  weekStart.setHours(0,0,0,0);
+
+  // Week of label — Monday
   const d = new Date();
   d.setDate(d.getDate() - d.getDay() + 1);
   const weekOf = d.toISOString().split('T')[0];
 
-  // ── Revenue ──
-  const sales_total   = salesRows.reduce((s,r) => s + toNum(val(r,['total','amount','sale total','revenue','price'])), 0);
-  const autopay_total = autopayRows.reduce((s,r) => s + toNum(val(r,['payment amount','amount','autopay','price','monthly'])), 0);
+  const salesRows    = get('01_sales');
+  const autopayRows  = get('02_autopay');
+  const activeRows   = get('03_members_active');
+  const cancelRows   = get('04_members_cancelled');
+  const firstRows    = get('05_first_visit');
+  const noReturnRows = get('06_no_return');
+  const retMgmtRows  = get('07_retention_management');
+  const classRows    = get('12_class_visit'); // Use summary class data, not raw attendance
 
-  // ── Membership counts ──
+  // ── Revenue ──
+  // Sales total = sum of Item Total from sales report
+  const sales_total = salesRows.reduce((s,r) => {
+    return s + toNum(r['Item Total'] || r['Total'] || r['Amount'] || 0);
+  }, 0);
+
+  // Autopay = MRR (monthly recurring revenue — full month billing)
+  const autopay_total = autopayRows.reduce((s,r) => {
+    return s + toNum(r['Amount'] || 0);
+  }, 0);
+
+  // ── Membership ──
   const active_count    = activeRows.length;
   const cancelled_count = cancelRows.length;
-  const first_visit_count = firstRows.length;
 
-  // ── Build retention lookup (name → lifetime visits + member since) ──
+  // New FOUNDER MEMBERS this week = retention_management rows where:
+  // 1. Membership Type contains "Founder"
+  // 2. Member Since date is within past 7 days
+  const first_visit_count = retMgmtRows.filter(r => {
+    const ms   = r['Member Since'] || '';
+    const type = (r['Membership Type'] || '').toLowerCase();
+    if (!type.includes('founder')) return false;
+    try { return new Date(ms) >= weekStart; } catch { return false; }
+  }).length;
+
+  // First time visitors this week (ClassPass, drop-ins — informational only)
+  const first_time_visitors = firstRows.length;
+
+  // ── Build retention lookup from retention management report ──
+  // Columns: ID, Last name, First name, Member Since, Check Ins YTD, etc.
   const retLookup = {};
   retMgmtRows.forEach(r => {
-    const name = (val(r,['name','client','first name','full name']) || '').trim().toLowerCase();
-    if (name) retLookup[name] = {
-      lifetime_visits: toNum(val(r,['visits','total visits','visit count','visits ytd','visits 365'])),
-      member_since:    val(r,['join date','start date','member since','date joined']) || '',
-    };
+    const first = (r['First name']||'').trim();
+    const last  = (r['Last name']||'').trim();
+    const fullName = (first + ' ' + last).trim().toLowerCase();
+    if (fullName.trim()) {
+      retLookup[fullName] = {
+        lifetime_visits: toNum(r['Check Ins YTD'] || r['Check Ins 365 Day'] || 0),
+        member_since:    r['Member Since'] || '',
+      };
+    }
   });
 
-  // ── No-return members — enriched, capped at 50 ──
-  const no_return_members = noReturnRows.slice(0, 50).map(r => {
-    const name = (val(r,['name','client','first name','full name']) || '').trim();
-    const enrich = retLookup[name.toLowerCase()] || {};
+  // ── No-return members — fix names, enrich, cap at 20 ──
+  const no_return_members = noReturnRows.slice(0, 20).map(r => {
+    const rawName = r['Client'] || '';
+    const name    = fixName(rawName);
+    const enrich  = retLookup[name.toLowerCase()] || {};
     return {
       name,
-      email:           val(r,['email','email address']) || '',
-      phone:           val(r,['phone','mobile','phone number']) || '',
-      membership:      val(r,['membership','pricing option','type','plan']) || '',
-      last_visit:      val(r,['last visit','last visit date','last appointment','date']) || '',
+      email:           (r['Email'] || '').trim(),
+      phone:           (r['Phone'] || '').trim(),
+      membership:      (r['Pricing Option'] || r['Membership'] || '').trim(),
+      last_visit:      (r['Last Visit'] || '').trim(),
       lifetime_visits: enrich.lifetime_visits || 0,
       member_since:    enrich.member_since || '',
     };
   });
 
-  // ── Cancelled members this week — capped at 30 ──
-  const cancelled_members = cancelRows.slice(0, 30).map(r => ({
-    name:        (val(r,['name','client','first name','full name']) || '').trim(),
-    email:       val(r,['email','email address']) || '',
-    phone:       val(r,['phone','mobile','phone number']) || '',
-    membership:  val(r,['membership','pricing option','type','plan']) || '',
-    cancel_date: val(r,['cancel date','cancellation date','end date','date']) || '',
+  // ── Cancelled members — fix names ──
+  const cancelled_members = cancelRows.map(r => ({
+    name:        fixName(r['Client'] || r['Name'] || ''),
+    email:       (r['Email'] || '').trim(),
+    phone:       (r['Phone'] || r['Mobile phone'] || '').trim(),
+    membership:  (r['Membership Type'] || r['Pricing Option'] || '').trim(),
+    cancel_date: (r['Cancel Date'] || r['Date'] || '').trim(),
   }));
 
-  // ── Class data — aggregated by class name ──
+  // ── Class data from 12_class_visit.csv ──
+  // Columns: Visit Type, Paid Visits, Total Visits (with commas)
   const classMap = {};
-  const rows = attendRows.length ? attendRows : classRows;
-  rows.forEach(r => {
-    const name     = (val(r,['class name','service name','class','service','name']) || 'Unknown').trim();
-    const visits   = toNum(val(r,['total booked','booked','attended','signed in','visits','count']));
-    const capacity = toNum(val(r,['capacity','max capacity','max clients','class size','maximum']));
-    if (!classMap[name]) classMap[name] = {name, visits:0, capacity:0};
-    classMap[name].visits   += visits;
-    classMap[name].capacity += capacity;
+  classRows.forEach(r => {
+    const name   = (r['Visit Type'] || 'Unknown').trim();
+    const visits = toNum(r['Total Visits'] || r['Paid Visits'] || 0);
+    if (!classMap[name]) classMap[name] = { name, visits: 0, capacity: 0 };
+    classMap[name].visits += visits;
   });
-  const class_data = Object.values(classMap);
+  const class_data = Object.values(classMap).filter(c => c.visits > 0);
 
-  // ── No-show count ──
-  const no_show_count = (get('10_attendance_no_revenue')).filter(r =>
-    (val(r,['status','visit status','type']) || '').toLowerCase().includes('no')
+  // ── No-show count from attendance_no_revenue ──
+  const noRevRows    = get('10_attendance_no_revenue');
+  const no_show_count = noRevRows.filter(r =>
+    (r['Status'] || '').toLowerCase().includes('no show') ||
+    (r['Status'] || '').toLowerCase() === 'late cancel'
   ).length;
 
   return {
     week_of: weekOf,
-    sales_total,
-    autopay_total,
+    sales_total:       Math.round(sales_total),
+    autopay_total:     Math.round(autopay_total),
     active_count,
     cancelled_count,
     first_visit_count,
+    first_time_visitors,
     no_show_count,
     no_return_members,
     cancelled_members,
