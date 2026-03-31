@@ -51,13 +51,11 @@ export default async function handler(req, res) {
     result.week_of     = data.week_of;
     result.uploaded_at = new Date().toISOString();
 
-    // 2. Save to Apps Script via POST body encoded as JSON in a GET param
-    // We save a compact version to keep the URL small
+    // 2. Save to Apps Script via POST (no URL length limit)
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyyqmSW4DM178V3C9W1H4Isnhh_t8bhwo1V1yLVjpAzvdSeoXaHIhkpcqfHjQjbfe-K/exec';
 
-    // Strip large arrays from what we save to keep URL short
-    // Apps Script only needs the processed metrics + small dorian list
-    const toSave = {
+    // 2a. Save Claude's analysis (full, including trimmed dorian)
+    const claudeSave = {
       ...result,
       dorian: {
         critical: (result.dorian?.critical || []).slice(0, 10),
@@ -67,21 +65,39 @@ export default async function handler(req, res) {
       }
     };
 
-    const saveEncoded = encodeURIComponent(JSON.stringify(toSave));
+    // 2b. Save raw computed data (for class section persistence)
+    // Strip PII-heavy arrays, keep only what the dashboard needs for class/frequency rendering
+    const rawSave = {
+      week_of:                    data.week_of,
+      health_summary:             data.health_summary             || {},
+      avg_founder_visits:         data.avg_founder_visits         || 0,
+      founder_frequency_histogram:data.founder_frequency_histogram|| {},
+      founder_days:               data.founder_days               || [],
+      founder_times:              data.founder_times              || [],
+      top_instructors:           (data.top_instructors            || []).slice(0, 8),
+      class_data:                (data.class_data                 || []).slice(0, 20),
+      founder_classes:           (data.founder_classes            || []).slice(0, 20),
+      same_day_booking_pct:       data.same_day_booking_pct       || 0,
+      active_count:               data.active_count               || 0,
+      first_visit_count:          data.first_visit_count          || 0,
+    };
 
-    // Only save if payload is small enough
-    if (saveEncoded.length < 8000) {
-      try {
-        await fetch(APPS_SCRIPT_URL + '?action=save&week_of=' +
-          encodeURIComponent(data.week_of) + '&data=' + saveEncoded);
-      } catch (e) {
-        result.save_warning = 'Save failed: ' + e.message;
-      }
-    } else {
-      result.save_warning = 'Data too large to save (' + saveEncoded.length + ' chars)';
+    try {
+      await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action:   'save_week',
+          week_of:  data.week_of,
+          claude:   claudeSave,
+          raw:      rawSave,
+        })
+      });
+    } catch (e) {
+      result.save_warning = 'Save failed: ' + e.message;
     }
 
-    // 3. Get previous week
+    // 3. Get previous week for WoW deltas
     let previous = null;
     try {
       const prevRes  = await fetch(APPS_SCRIPT_URL + '?action=get_previous&week_of=' + encodeURIComponent(data.week_of));
@@ -89,7 +105,8 @@ export default async function handler(req, res) {
       if (prevData.ok) previous = prevData.data;
     } catch { /* optional */ }
 
-    return res.status(200).json({ ok: true, current: result, previous });
+    // 4. Attach raw data so dashboard can render class section immediately
+    return res.status(200).json({ ok: true, current: result, previous, raw: rawSave });
 
   } catch (err) {
     return res.status(500).json({ error: err.message });
