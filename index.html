@@ -101,7 +101,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 <div id="root"></div>
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwA-LozmvBlvp6m1ZtROzC97qNM2Evh1sKtHVVQzEfkWclMTRz-y1y1P7T5UkuveArv/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyyqmSW4DM178V3C9W1H4Isnhh_t8bhwo1V1yLVjpAzvdSeoXaHIhkpcqfHjQjbfe-K/exec';
 
 const EXPECTED = [
   {key:'01_sales',                  label:'Sales Report',               group:'Revenue'},
@@ -545,29 +545,14 @@ async function processFiles() {
   render();
 
   try {
-    let payload = aggregateData();
+    const payload = aggregateData();
+    console.log('Sending to Vercel API...');
 
-    // Trim lists progressively until URL is under 3500 chars
-    let encoded = encodeURIComponent(JSON.stringify(payload));
-    const limits = [30, 20, 10, 5, 3, 1];
-    for (const limit of limits) {
-      if (encoded.length <= 3500) break;
-      payload.no_return_members = payload.no_return_members.slice(0, limit);
-      payload.cancelled_members = payload.cancelled_members.slice(0, limit);
-      payload.class_data        = payload.class_data.slice(0, limit);
-      encoded = encodeURIComponent(JSON.stringify(payload));
-    }
-    // Absolute fallback — strip lists entirely if still too large
-    if (encoded.length > 3500) {
-      payload.no_return_members = [];
-      payload.cancelled_members = [];
-      payload.class_data        = [];
-      encoded = encodeURIComponent(JSON.stringify(payload));
-    }
-    console.log('Final payload size:', encoded.length, 'chars');
-
-    const url    = SCRIPT_URL + '?action=process&data=' + encoded;
-    const result = await jsonp(url);
+    const result = await fetch('/api/process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(r => r.json());
 
     if (result.error) throw new Error(result.error);
     if (!result.ok)   throw new Error('Processing failed: ' + JSON.stringify(result));
