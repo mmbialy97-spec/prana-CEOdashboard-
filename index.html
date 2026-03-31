@@ -96,6 +96,54 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .dash-header{display:flex;align-items:center;gap:14px;margin-bottom:40px;padding-bottom:24px;border-bottom:1px solid var(--border)}
 .dash-actions{margin-left:auto;display:flex;gap:10px;align-items:center}
 .week-select{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--ink-2);background:var(--surface);font-family:var(--body);cursor:pointer}
+
+/* ── Mobile ── */
+@media (max-width:640px) {
+  /* Dashboard outer wrapper */
+  .dash-outer{padding:20px 16px 60px !important}
+
+  /* Header stacks logo+title on left, actions wrap below */
+  .dash-header-inner{flex-wrap:wrap !important;gap:10px !important;margin-bottom:24px !important;padding-bottom:16px !important}
+  .dash-header-actions{margin-left:0 !important;width:100% !important;justify-content:space-between !important}
+
+  /* Intelligence headline smaller */
+  .intel-headline{padding:22px 20px !important}
+  .intel-headline-text{font-size:20px !important;line-height:1.4 !important}
+
+  /* Risk/Bright Spot: stack */
+  .risk-bright-grid{grid-template-columns:1fr !important}
+
+  /* Revenue: stack */
+  .revenue-grid{grid-template-columns:1fr !important}
+
+  /* Class summary: 1 col */
+  .class-summary-grid{grid-template-columns:1fr !important}
+
+  /* Class table+freq: stack */
+  .class-table-grid{grid-template-columns:1fr !important}
+
+  /* Class instructors+days: stack */
+  .class-ins-grid{grid-template-columns:1fr !important}
+
+  /* Monthly KPI: 2x2 */
+  .monthly-kpi-grid{grid-template-columns:1fr 1fr !important}
+
+  /* Monthly week table: hide less important columns */
+  .monthly-table-col-churn{display:none !important}
+  .monthly-table-col-visits{display:none !important}
+  .monthly-week-table{grid-template-columns:1.2fr 1fr 1fr 1fr !important}
+
+  /* Monthly class+freq: stack */
+  .monthly-class-grid{grid-template-columns:1fr !important}
+
+  /* Action card phone button: full width on mobile */
+  .action-phone-btn{width:100% !important;margin-top:8px !important;text-align:center !important}
+  .action-header{flex-wrap:wrap !important}
+
+  /* General: reduce section spacing */
+  .dash-section{margin-bottom:32px !important}
+  .dash-divider{margin:24px 0 !important}
+}
 </style>
 </head>
 <body>
@@ -324,16 +372,16 @@ function renderDashboard() {
   const p = d.previous;
 
   return `
-  <div style="max-width:1100px;margin:0 auto;padding:40px 32px 80px" class="fu">
+  <div style="max-width:1100px;margin:0 auto;padding:40px 32px 80px" class="fu dash-outer">
 
     <!-- ─── HEADER ──────────────────────────────────────────────── -->
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:40px;padding-bottom:24px;border-bottom:1px solid var(--border)">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:40px;padding-bottom:24px;border-bottom:1px solid var(--border)" class="dash-header-inner">
       <div class="logo">P</div>
       <div>
         <div class="brand-name">Prana Wellness Club</div>
         <div class="brand-sub">Week of ${c.week_of||''} · Founder Member Dashboard</div>
       </div>
-      <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap" class="dash-header-actions">
         <!-- View toggle -->
         <div style="display:flex;background:var(--surface-2);border-radius:var(--radius);padding:3px;gap:2px">
           <button onclick="setViewMode('weekly')" style="padding:6px 14px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--body);background:${state.viewMode==='weekly'?'var(--surface)':'transparent'};color:${state.viewMode==='weekly'?'var(--ink)':'var(--ink-3)'};box-shadow:${state.viewMode==='weekly'?'var(--shadow)':'none'};transition:all 0.15s">Weekly</button>
@@ -379,9 +427,9 @@ function renderWeeklyBody(d, c, p) {
     <div style="margin-bottom:48px">
 
       <!-- Headline -->
-      <div style="background:var(--ink);border-radius:var(--radius-lg);padding:32px;margin-bottom:12px;position:relative;overflow:hidden">
+      <div style="background:var(--ink);border-radius:var(--radius-lg);padding:32px;margin-bottom:12px;position:relative;overflow:hidden" class="intel-headline">
         <div style="font-size:10px;font-weight:600;letter-spacing:0.14em;color:rgba(255,255,255,0.3);text-transform:uppercase;margin-bottom:16px">THIS WEEK · PRANA WELLNESS</div>
-        <div style="font-family:var(--display);font-size:26px;color:#fff;line-height:1.45;max-width:780px">${intel.headline||'—'}</div>
+        <div style="font-family:var(--display);font-size:26px;color:#fff;line-height:1.45;max-width:780px" class="intel-headline-text">${intel.headline||'—'}</div>
       </div>
 
       <!-- Actions -->
@@ -404,10 +452,10 @@ function renderWeeklyBody(d, c, p) {
             return `
             <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
               <!-- Action header -->
-              <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:${urgencyBg};border-bottom:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:${urgencyBg};border-bottom:1px solid var(--border)" class="action-header">
                 <div style="width:24px;height:24px;border-radius:50%;background:${numBg};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
                 <div style="font-size:10px;font-weight:700;letter-spacing:0.1em;color:${urgencyColor};text-transform:uppercase;flex:1">${urgencyLabel}</div>
-                ${phone ? `<a href="tel:${phone}" style="font-family:var(--mono);font-size:12px;font-weight:600;color:${urgencyColor};text-decoration:none;background:white;padding:4px 10px;border-radius:4px;border:1px solid ${urgencyColor}">${phone}</a>` : ''}
+                ${phone ? `<a href="tel:${phone}" style="font-family:var(--mono);font-size:12px;font-weight:600;color:${urgencyColor};text-decoration:none;background:white;padding:4px 10px;border-radius:4px;border:1px solid ${urgencyColor}" class="action-phone-btn">${phone}</a>` : ''}
               </div>
               <!-- Action body -->
               <div style="padding:14px 16px;font-size:13px;color:var(--ink);line-height:1.65">${act}</div>
@@ -417,7 +465,7 @@ function renderWeeklyBody(d, c, p) {
       </div>
 
       <!-- Risk + Bright Spot — 60/40, risk dominates -->
-      <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px">
+      <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px" class="risk-bright-grid">
 
         <div style="background:var(--red-light);border:1px solid var(--red);border-radius:var(--radius-lg);padding:20px 24px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
@@ -545,7 +593,7 @@ function renderWeeklyBody(d, c, p) {
     <!-- ─── 3. REVENUE ───────────────────────────────────────────── -->
     <div style="margin-bottom:48px">
       <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Revenue Breakdown</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px" class="revenue-grid">
 
         <!-- MRR context card -->
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
@@ -609,7 +657,7 @@ function renderWeeklyBody(d, c, p) {
 
         // ── Row 1: 3 summary cards ──
         const summaryRow = `
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px" class="class-summary-grid">
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">
             <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Founder Visits This Week</div>
             <div style="font-family:var(--display);font-size:28px;color:${totalFounderVisits>0?'var(--green)':'var(--ink-3)'}">${totalFounderVisits||'—'}</div>
@@ -665,7 +713,7 @@ function renderWeeklyBody(d, c, p) {
         }).join('');
 
         const tableAndFreq = `
-        <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:12px">
+        <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:12px" class="class-table-grid">
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)">
             <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
               <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--green);text-transform:uppercase;flex:1">Founder Membership Classes</div>
@@ -715,7 +763,7 @@ function renderWeeklyBody(d, c, p) {
           </div>` : '';
 
         const insAndDays = `
-        <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:12px">
+        <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:12px" class="class-ins-grid">
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
             <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Instructors by Founder Engagement</div>
             <div style="font-size:11px;color:var(--ink-3);margin-bottom:14px">Which instructors draw the most Founders</div>
@@ -856,7 +904,7 @@ function renderMonthly(weeks, dashData) {
   <!-- Monthly KPI row -->
   <div style="margin-bottom:32px">
     <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Last ${recent.length} Weeks · ${labels[0]} → ${labels[labels.length-1]}</div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px" class="monthly-kpi-grid">
 
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
         <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Current MRR</div>
@@ -895,13 +943,13 @@ function renderMonthly(weeks, dashData) {
   <div style="margin-bottom:32px">
     <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Week by Week</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)">
-      <div style="display:grid;grid-template-columns:1.4fr repeat(5,1fr);padding:12px 18px;border-bottom:2px solid var(--border);background:var(--bg)">
+      <div style="display:grid;grid-template-columns:1.4fr repeat(5,1fr);padding:12px 18px;border-bottom:2px solid var(--border);background:var(--bg)" class="monthly-week-table">
         <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase">Week of</div>
         <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right">Members</div>
         <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right">Net</div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right">Churn %</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right" class="monthly-table-col-churn">Churn %</div>
         <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right">MRR</div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right">Avg Visits</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right" class="monthly-table-col-visits">Avg Visits</div>
       </div>
       ${recent.map((w,i) => {
         const net    = getM(w,'membership.net_growth');
@@ -911,13 +959,13 @@ function renderMonthly(weeks, dashData) {
         const av     = getM(w,'avg_founder_visits') || 0;
         const isLast = i === recent.length - 1;
         return `
-        <div style="display:grid;grid-template-columns:1.4fr repeat(5,1fr);padding:12px 18px;border-bottom:1px solid var(--border);background:${isLast?'var(--green-light)':'var(--surface)'}">
+        <div style="display:grid;grid-template-columns:1.4fr repeat(5,1fr);padding:12px 18px;border-bottom:1px solid var(--border);background:${isLast?'var(--green-light)':'var(--surface)'}" class="monthly-week-table">
           <div style="font-size:13px;font-weight:${isLast?'600':'400'};color:var(--ink)">${w.week_of}${isLast?' ← latest':''}</div>
           <div style="font-family:var(--mono);font-size:13px;color:var(--ink);text-align:right">${cnt}</div>
           <div style="font-family:var(--mono);font-size:13px;color:${net>0?'var(--green)':net<0?'var(--red)':'var(--ink-3)'};text-align:right">${net>0?'+':''}${net}</div>
-          <div style="font-family:var(--mono);font-size:13px;color:${churn>5?'var(--red)':churn>3?'var(--amber)':'var(--ink)'};text-align:right">${churn}%</div>
+          <div style="font-family:var(--mono);font-size:13px;color:${churn>5?'var(--red)':churn>3?'var(--amber)':'var(--ink)'};text-align:right" class="monthly-table-col-churn">${churn}%</div>
           <div style="font-family:var(--mono);font-size:13px;color:var(--green);text-align:right">${fmtC(mrr)}</div>
-          <div style="font-family:var(--mono);font-size:13px;color:${av>=3?'var(--green)':av>=2?'var(--amber)':av>0?'var(--red)':'var(--ink-3)'};text-align:right">${av||'—'}</div>
+          <div style="font-family:var(--mono);font-size:13px;color:${av>=3?'var(--green)':av>=2?'var(--amber)':av>0?'var(--red)':'var(--ink-3)'};text-align:right" class="monthly-table-col-visits">${av||'—'}</div>
         </div>`;
       }).join('')}
     </div>
@@ -926,7 +974,7 @@ function renderMonthly(weeks, dashData) {
   ${divider()}
 
   <!-- Class engagement + frequency side by side -->
-  <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:32px">
+  <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:32px" class="monthly-class-grid">
 
     <!-- Top classes by founder visits this period -->
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)">
