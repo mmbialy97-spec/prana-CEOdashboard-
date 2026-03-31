@@ -128,6 +128,14 @@ IMPORTANT DATA NOTES:
 - founder_classes = classes sorted by Founder Member engagement (founder_pct = % of class that are Founders)
 - Reformer Pilates is excluded from Founder Membership analysis — it is a paid add-on
 
+- founder_frequency_histogram = how many Founders visited 0, 1, 2, 3-4, 5+ times this month — use this to quantify the "dead weight" problem
+- founder_days = [{day, count}] sorted by founder visits — which days of week Founders prefer
+- founder_times = [{time, count}] sorted by popularity — which time slots Founders prefer
+- top_instructors = [{name, visits, founder_visits, founder_pct}] — which instructors draw the most Founders; use this if a specific instructor is driving retention
+- paid_services = non-membership paid services this week (Reformer, packs etc) — only mention as acquisition data
+- same_day_booking_pct = % of bookings made same day as class — high % means impulsive/uncommitted behavior, low % means planners
+- retention_segments = from 08_retention report if available
+
 CALCULATION RULES:
 - mrr = autopay_total
 - pack_and_class = sales_total
