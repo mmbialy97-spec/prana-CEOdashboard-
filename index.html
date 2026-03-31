@@ -129,6 +129,7 @@ let state = {
   dashData: null,
   weeks: [],
   selectedWeek: null,
+  viewMode: 'weekly',   // weekly | monthly
   error: null,
 };
 
@@ -321,26 +322,6 @@ function renderDashboard() {
   const d = state.dashData;
   const c = d.current;
   const p = d.previous;
-  const r  = c.revenue    || {};
-  const m  = c.membership || {};
-  const a  = c.attendance  || {};
-  const dorian = c.dorian  || {};
-  const intel  = c.intelligence || {};
-  const hs     = c.health_summary || {};
-
-  const atRiskCount = (dorian.critical||[]).length + (dorian.watch||[]).length + (dorian.lost||[]).length;
-  const newFounders  = c.new_founder_members || [];
-
-  // WoW delta helper
-  const wow = (curr, prev, isC) => {
-    if (!p || prev == null) return '';
-    const diff = curr - prev;
-    if (diff === 0) return '';
-    const color = diff > 0 ? 'var(--green)' : 'var(--red)';
-    const label = isC ? fmtC(Math.abs(diff)) : Math.abs(diff);
-    const sign  = diff > 0 ? '+' : '−';
-    return `<span style="font-size:11px;color:${color};margin-left:6px;font-weight:500">${sign}${label} vs last week</span>`;
-  };
 
   return `
   <div style="max-width:1100px;margin:0 auto;padding:40px 32px 80px" class="fu">
@@ -353,6 +334,11 @@ function renderDashboard() {
         <div class="brand-sub">Week of ${c.week_of||''} · Founder Member Dashboard</div>
       </div>
       <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+        <!-- View toggle -->
+        <div style="display:flex;background:var(--surface-2);border-radius:var(--radius);padding:3px;gap:2px">
+          <button onclick="setViewMode('weekly')" style="padding:6px 14px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--body);background:${state.viewMode==='weekly'?'var(--surface)':'transparent'};color:${state.viewMode==='weekly'?'var(--ink)':'var(--ink-3)'};box-shadow:${state.viewMode==='weekly'?'var(--shadow)':'none'};transition:all 0.15s">Weekly</button>
+          <button onclick="setViewMode('monthly')" style="padding:6px 14px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--body);background:${state.viewMode==='monthly'?'var(--surface)':'transparent'};color:${state.viewMode==='monthly'?'var(--ink)':'var(--ink-3)'};box-shadow:${state.viewMode==='monthly'?'var(--shadow)':'none'};transition:all 0.15s">Monthly</button>
+        </div>
         ${state.weeks.length > 1 ? `
           <select class="week-select" onchange="switchWeek(this.value)">
             ${state.weeks.map(w => `<option value="${w.week_of}" ${w.week_of===state.selectedWeek?'selected':''}>${w.week_of}</option>`).join('')}
@@ -361,7 +347,35 @@ function renderDashboard() {
       </div>
     </div>
 
-    <!-- ─── 1. INTELLIGENCE ──────────────────────────────────────── -->
+    <!-- ─── BODY: weekly or monthly ────────────────────────────── -->
+    ${state.viewMode === 'monthly' ? renderMonthly(state.weeks, state.dashData) : renderWeeklyBody(d, c, p)}
+
+  </div>`;
+}
+
+// ─── Weekly body (extracted from renderDashboard) ─────────────────
+function renderWeeklyBody(d, c, p) {
+  const r      = c.revenue    || {};
+  const m      = c.membership || {};
+  const a      = c.attendance  || {};
+  const dorian = c.dorian  || {};
+  const intel  = c.intelligence || {};
+  const hs     = c.health_summary || {};
+
+  const atRiskCount = (dorian.critical||[]).length + (dorian.watch||[]).length + (dorian.lost||[]).length;
+  const newFounders  = c.new_founder_members || [];
+
+  const wow = (curr, prev, isC) => {
+    if (!p || prev == null) return '';
+    const diff = curr - prev;
+    if (diff === 0) return '';
+    const color = diff > 0 ? 'var(--green)' : 'var(--red)';
+    const label = isC ? fmtC(Math.abs(diff)) : Math.abs(diff);
+    const sign  = diff > 0 ? '+' : '−';
+    return `<span style="font-size:11px;color:${color};margin-left:6px;font-weight:500">${sign}${label} vs last week</span>`;
+  };
+
+  return `
     <div style="margin-bottom:48px">
 
       <!-- Headline -->
@@ -747,10 +761,239 @@ function renderDashboard() {
       ${renderDorianList(dorian, newFounders)}
     </div>
 
-  </div>`;
+  `; // end renderWeeklyBody
 }
 
-// ─── Health summary renderer ─────────────────────────────────────
+// ─── Monthly view ─────────────────────────────────────────────────
+function renderMonthly(weeks, dashData) {
+  if (!weeks || weeks.length < 2) {
+    return `
+    <div style="padding:48px 32px;text-align:center">
+      <div style="font-family:var(--display);font-size:20px;color:var(--ink);margin-bottom:8px">Not enough data yet</div>
+      <div style="font-size:14px;color:var(--ink-3)">Upload at least 2 weeks to see the monthly view.</div>
+    </div>`;
+  }
+
+  // Use the most recent 4 weeks
+  const recent = [...weeks].sort((a,b) => new Date(b.week_of) - new Date(a.week_of)).slice(0, 4).reverse();
+  const labels = recent.map(w => w.week_of);
+
+  // Pull metrics from each week's stored claude data
+  const getM = (w, path, fallback=0) => {
+    try { return path.split('.').reduce((o,k) => o[k], w) ?? fallback; } catch { return fallback; }
+  };
+
+  // MRR trend
+  const mrrs        = recent.map(w => getM(w, 'membership.active_count') * 149);
+  const members     = recent.map(w => getM(w, 'membership.active_count'));
+  const netGrowths  = recent.map(w => getM(w, 'membership.net_growth'));
+  const churnRates  = recent.map(w => getM(w, 'membership.churn_rate_pct'));
+  const avgVisits   = recent.map(w => getM(w, 'avg_founder_visits') || 0);
+
+  // Aggregate class data across all weeks
+  const classAgg = {};
+  recent.forEach(w => {
+    (w.class_data || w.founder_classes || []).forEach(cl => {
+      if (!classAgg[cl.name]) classAgg[cl.name] = { name: cl.name, founder_visits: 0, visits: 0, weeks: 0 };
+      classAgg[cl.name].founder_visits += cl.founder_visits || 0;
+      classAgg[cl.name].visits         += cl.visits || 0;
+      classAgg[cl.name].weeks++;
+    });
+  });
+  const topClasses = Object.values(classAgg)
+    .filter(c => c.founder_visits > 0 && !c.name.toLowerCase().includes('reformer'))
+    .sort((a,b) => b.founder_visits - a.founder_visits).slice(0, 8)
+    .map(c => ({ ...c, founder_pct: c.visits > 0 ? Math.round(c.founder_visits/c.visits*100) : 0 }));
+
+  // Aggregate frequency histograms
+  const freqAgg = { '0 visits':0, '1 visit':0, '2 visits':0, '3–4 visits':0, '5+ visits':0 };
+  recent.forEach(w => {
+    const h = w.founder_frequency_histogram || {};
+    Object.entries(h).forEach(([k,v]) => { if (freqAgg[k] !== undefined) freqAgg[k] += v; });
+  });
+  const freqAvg = Object.fromEntries(Object.entries(freqAgg).map(([k,v]) => [k, Math.round(v/recent.length)]));
+
+  // Aggregate instructors
+  const insAgg = {};
+  recent.forEach(w => {
+    (w.top_instructors || []).forEach(ins => {
+      if (!insAgg[ins.name]) insAgg[ins.name] = { name: ins.name, founder_visits: 0, visits: 0 };
+      insAgg[ins.name].founder_visits += ins.founder_visits || 0;
+      insAgg[ins.name].visits         += ins.visits || 0;
+    });
+  });
+  const topIns = Object.values(insAgg)
+    .map(i => ({ ...i, founder_pct: i.visits > 0 ? Math.round(i.founder_visits/i.visits*100) : 0 }))
+    .sort((a,b) => b.founder_visits - a.founder_visits).slice(0, 6);
+
+  const totalNewMembers   = recent.reduce((s,w) => s + getM(w,'membership.new_this_week'), 0);
+  const totalChurned      = recent.reduce((s,w) => s + getM(w,'membership.churned_this_week'), 0);
+  const netMemberGrowth   = totalNewMembers - totalChurned;
+  const latestMRR         = mrrs[mrrs.length-1];
+  const earliestMRR       = mrrs[0];
+  const mrrGrowth         = latestMRR - earliestMRR;
+  const avgChurn          = (churnRates.reduce((s,v)=>s+v,0)/churnRates.length).toFixed(1);
+  const avgVisitsMonth    = (avgVisits.reduce((s,v)=>s+v,0)/avgVisits.filter(v=>v>0).length || 0).toFixed(1);
+
+  // Sparkline helper (inline SVG)
+  function sparkline(values, color='var(--green)', height=32, width=120) {
+    if (!values.length) return '';
+    const min = Math.min(...values), max = Math.max(...values);
+    const range = max - min || 1;
+    const pts = values.map((v,i) => {
+      const x = (i / (values.length-1)) * (width-4) + 2;
+      const y = height - 4 - ((v-min)/range) * (height-8);
+      return `${x},${y}`;
+    }).join(' ');
+    return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
+
+  const freqColors = {'0 visits':'var(--red)','1 visit':'var(--amber)','2 visits':'var(--amber)','3–4 visits':'var(--green)','5+ visits':'var(--green)'};
+  const freqTotal = Object.values(freqAvg).reduce((s,v)=>s+v,0);
+  const maxFreqVal = Math.max(...Object.values(freqAvg), 1);
+
+  return `
+  <!-- Monthly KPI row -->
+  <div style="margin-bottom:32px">
+    <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Last ${recent.length} Weeks · ${labels[0]} → ${labels[labels.length-1]}</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Current MRR</div>
+        <div style="font-family:var(--display);font-size:26px;color:var(--green)">${fmtC(latestMRR)}</div>
+        <div style="font-size:11px;color:${mrrGrowth>=0?'var(--green)':'var(--red)'};margin-top:4px">${mrrGrowth>=0?'+':''}${fmtC(mrrGrowth)} over period</div>
+        <div style="margin-top:8px">${sparkline(mrrs)}</div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Net Member Growth</div>
+        <div style="font-family:var(--display);font-size:26px;color:${netMemberGrowth>=0?'var(--green)':'var(--red)'}">${netMemberGrowth>=0?'+':''}${netMemberGrowth}</div>
+        <div style="font-size:11px;color:var(--ink-3);margin-top:4px">${totalNewMembers} joined · ${totalChurned} churned</div>
+        <div style="margin-top:8px">${sparkline(members,'var(--ink-2)')}</div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Avg Weekly Churn</div>
+        <div style="font-family:var(--display);font-size:26px;color:${parseFloat(avgChurn)>5?'var(--red)':parseFloat(avgChurn)>3?'var(--amber)':'var(--ink)'}">${avgChurn}%</div>
+        <div style="font-size:11px;color:var(--ink-3);margin-top:4px">per week over period</div>
+        <div style="margin-top:8px">${sparkline(churnRates,'var(--red)')}</div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Avg Visits / Founder</div>
+        <div style="font-family:var(--display);font-size:26px;color:${parseFloat(avgVisitsMonth)>=3?'var(--green)':parseFloat(avgVisitsMonth)>=2?'var(--amber)':'var(--red)'}">${avgVisitsMonth}</div>
+        <div style="font-size:11px;color:var(--ink-3);margin-top:4px">avg per week · target 3+</div>
+        <div style="margin-top:8px">${sparkline(avgVisits.filter(v=>v>0),'var(--amber)')}</div>
+      </div>
+
+    </div>
+  </div>
+
+  ${divider()}
+
+  <!-- Weekly breakdown table -->
+  <div style="margin-bottom:32px">
+    <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Week by Week</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)">
+      <div style="display:grid;grid-template-columns:1.4fr repeat(5,1fr);padding:12px 18px;border-bottom:2px solid var(--border);background:var(--bg)">
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase">Week of</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right">Members</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right">Net</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right">Churn %</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right">MRR</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right">Avg Visits</div>
+      </div>
+      ${recent.map((w,i) => {
+        const net    = getM(w,'membership.net_growth');
+        const churn  = getM(w,'membership.churn_rate_pct');
+        const cnt    = getM(w,'membership.active_count');
+        const mrr    = cnt * 149;
+        const av     = getM(w,'avg_founder_visits') || 0;
+        const isLast = i === recent.length - 1;
+        return `
+        <div style="display:grid;grid-template-columns:1.4fr repeat(5,1fr);padding:12px 18px;border-bottom:1px solid var(--border);background:${isLast?'var(--green-light)':'var(--surface)'}">
+          <div style="font-size:13px;font-weight:${isLast?'600':'400'};color:var(--ink)">${w.week_of}${isLast?' ← latest':''}</div>
+          <div style="font-family:var(--mono);font-size:13px;color:var(--ink);text-align:right">${cnt}</div>
+          <div style="font-family:var(--mono);font-size:13px;color:${net>0?'var(--green)':net<0?'var(--red)':'var(--ink-3)'};text-align:right">${net>0?'+':''}${net}</div>
+          <div style="font-family:var(--mono);font-size:13px;color:${churn>5?'var(--red)':churn>3?'var(--amber)':'var(--ink)'};text-align:right">${churn}%</div>
+          <div style="font-family:var(--mono);font-size:13px;color:var(--green);text-align:right">${fmtC(mrr)}</div>
+          <div style="font-family:var(--mono);font-size:13px;color:${av>=3?'var(--green)':av>=2?'var(--amber)':av>0?'var(--red)':'var(--ink-3)'};text-align:right">${av||'—'}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>
+
+  ${divider()}
+
+  <!-- Class engagement + frequency side by side -->
+  <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:32px">
+
+    <!-- Top classes by founder visits this period -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)">
+      <div style="padding:16px 18px;border-bottom:1px solid var(--border)">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--green);text-transform:uppercase;margin-bottom:2px">Top Classes by Founder Visits</div>
+        <div style="font-size:11px;color:var(--ink-3)">Aggregated across all ${recent.length} weeks</div>
+      </div>
+      ${topClasses.length ? topClasses.map((cl,i) => {
+        const barColor = cl.founder_pct>=50?'var(--green)':cl.founder_pct>=25?'var(--amber)':'var(--border)';
+        return `
+        <div style="padding:10px 18px;display:flex;align-items:center;gap:12px;background:${i%2===1?'var(--bg)':'var(--surface)'};border-bottom:1px solid var(--border)">
+          <div style="flex:1;font-size:13px;font-weight:500;color:var(--ink)">${cl.name}</div>
+          <div style="font-family:var(--mono);font-size:12px;color:var(--green);width:60px;text-align:right">${cl.founder_visits} F</div>
+          <div style="width:80px;display:flex;align-items:center;gap:5px;justify-content:flex-end">
+            <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden;max-width:48px">
+              <div style="height:100%;width:${cl.founder_pct}%;background:${barColor};border-radius:3px"></div>
+            </div>
+            <div style="font-family:var(--mono);font-size:11px;color:${cl.founder_pct>=50?'var(--green)':cl.founder_pct>=25?'var(--amber)':'var(--ink-3)'};width:28px;text-align:right">${cl.founder_pct}%</div>
+          </div>
+        </div>`;
+      }).join('') : '<div style="padding:20px;font-size:13px;color:var(--ink-3)">No class data available</div>'}
+    </div>
+
+    <!-- Avg visit frequency histogram -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Avg Visit Frequency</div>
+      <div style="font-size:11px;color:var(--ink-3);margin-bottom:16px">Averaged across ${recent.length} weeks</div>
+      ${freqTotal > 0 ? Object.entries(freqAvg).map(([label, count]) => {
+        const pct   = freqTotal > 0 ? Math.round(count/freqTotal*100) : 0;
+        const width = Math.round(count/maxFreqVal*100);
+        return `
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+            <div style="font-size:12px;color:var(--ink-2)">${label}</div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--ink-3)">~${count} · ${pct}%</div>
+          </div>
+          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${width}%;background:${freqColors[label]||'var(--ink-3)'};border-radius:3px"></div>
+          </div>
+        </div>`;
+      }).join('') : '<div style="font-size:13px;color:var(--ink-3)">No frequency data yet</div>'}
+    </div>
+
+  </div>
+
+  ${topIns.length ? `
+  ${divider()}
+  <div style="margin-bottom:32px">
+    <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Instructors — Aggregated Over Period</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+      ${topIns.map((ins,i) => `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;${i>0?'border-top:1px solid var(--border)':''}">
+          <div style="flex:1;font-size:13px;font-weight:500;color:var(--ink)">${ins.name}</div>
+          <div style="font-family:var(--mono);font-size:12px;color:var(--green);width:70px;text-align:right">${ins.founder_visits} F visits</div>
+          <div style="font-family:var(--mono);font-size:12px;color:var(--ink-3);width:60px;text-align:right">${ins.visits} total</div>
+          <div style="font-family:var(--mono);font-size:12px;color:${ins.founder_pct>=50?'var(--green)':ins.founder_pct>=25?'var(--amber)':'var(--ink-3)'};width:40px;text-align:right">${ins.founder_pct}%</div>
+        </div>`).join('')}
+    </div>
+  </div>` : ''}
+  `;
+}
+
+// ─── View mode toggle ─────────────────────────────────────────────
+function setViewMode(mode) {
+  state.viewMode = mode;
+  render();
+}
 function renderHealthSummary(c) {
   const hs = c.health_summary || {};
   const total = (hs.green||0) + (hs.amber||0) + (hs.red||0) + (hs.frozen||0);
@@ -1298,6 +1541,11 @@ async function processFiles() {
     if (result.error) throw new Error(result.error);
     if (!result.ok)   throw new Error('Processing failed: ' + JSON.stringify(result));
 
+    // Merge raw computed data into current so class section works immediately
+    if (result.raw) {
+      result.current = { ...result.current, ...result.raw };
+    }
+
     state.dashData     = result;
     state.selectedWeek = result.current?.week_of;
 
@@ -1318,9 +1566,18 @@ async function processFiles() {
 // ─── Switch week ──────────────────────────────────────────────────
 async function switchWeek(weekOf) {
   state.selectedWeek = weekOf;
-  const result = await jsonp(SCRIPT_URL + '?action=read_week&week_of=' + encodeURIComponent(weekOf));
-  if (result.ok) {
-    state.dashData = result;
+  state.viewMode = 'weekly';
+  render();
+  try {
+    const result = await jsonp(SCRIPT_URL + '?action=read_week&week_of=' + encodeURIComponent(weekOf));
+    if (result.ok) {
+      // Merge raw data into current so class section renders correctly
+      if (result.raw) result.current = { ...result.current, ...result.raw };
+      state.dashData = result;
+      render();
+    }
+  } catch(e) {
+    state.error = 'Failed to load week: ' + e.message;
     render();
   }
 }
@@ -1334,6 +1591,7 @@ async function init() {
     const result = await jsonp(SCRIPT_URL + '?action=read_latest');
 
     if (result.ok && result.current) {
+      if (result.raw) result.current = { ...result.current, ...result.raw };
       state.dashData     = result;
       state.selectedWeek = result.current?.week_of;
 
