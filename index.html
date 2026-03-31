@@ -373,11 +373,17 @@ function renderDashboard() {
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px 26px;margin-bottom:12px;box-shadow:var(--shadow)">
         <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">TOP 3 ACTIONS THIS WEEK</div>
         <div style="display:flex;flex-direction:column;gap:14px">
-          ${(intel.actions||[]).map((act,i) => `
+          ${(intel.actions||[]).map((act,i) => {
+            const urgency = ['Call today','Contact this week','Reach out before Friday'][i]||'';
+            return `
             <div style="display:flex;gap:14px;align-items:flex-start">
               <div style="width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${i+1}</div>
-              <div style="font-size:14px;color:var(--ink);line-height:1.6;padding-top:2px">${act}</div>
-            </div>`).join('')}
+              <div style="padding-top:2px">
+                ${urgency ? `<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;color:${i===0?'var(--red)':'var(--amber)'};text-transform:uppercase;margin-bottom:4px">${urgency}</div>` : ''}
+                <div style="font-size:14px;color:var(--ink);line-height:1.6">${act}</div>
+              </div>
+            </div>`;
+          }).join('')}
         </div>
       </div>
 
@@ -427,14 +433,21 @@ function renderDashboard() {
         <!-- Member Health -->
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
           <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Member Health</div>
+          ${(() => {
+            const total = (hs.green||0)+(hs.amber||0)+(hs.red||0);
+            const greenPct = total ? Math.round((hs.green||0)/total*100) : 0;
+            const amberPct = total ? Math.round((hs.amber||0)/total*100) : 0;
+            const redPct   = total ? Math.round((hs.red||0)/total*100)   : 0;
+            return `
           <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px">
-            <span style="font-family:var(--display);font-size:28px;color:var(--green);line-height:1">${hs.green||0}</span>
-            <span style="font-size:13px;color:var(--ink-3)">healthy</span>
+            <span style="font-family:var(--display);font-size:28px;color:var(--green);line-height:1">${greenPct}%</span>
+            <span style="font-size:13px;color:var(--ink-3)">healthy (${hs.green||0})</span>
           </div>
           <div style="display:flex;gap:10px;font-size:11px">
-            <span style="color:var(--amber)">● ${hs.amber||0} at risk</span>
-            <span style="color:var(--red)">● ${hs.red||0} urgent</span>
-          </div>
+            <span style="color:var(--amber)">● ${amberPct}% at risk (${hs.amber||0})</span>
+            <span style="color:var(--red)">● ${redPct}% urgent (${hs.red||0})</span>
+          </div>`;
+          })()}
         </div>
 
         <!-- Avg visits per founder -->
@@ -452,9 +465,22 @@ function renderDashboard() {
           <div style="font-size:12px;color:var(--ink-2);font-weight:500">Progress to 800 Founder Members</div>
           <div style="font-family:var(--mono);font-size:12px;color:var(--green)">${m.active_count||0} / 800 · ${m.progress_to_800_pct||0}%</div>
         </div>
-        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px">
           <div style="height:100%;background:var(--green);border-radius:3px;width:${Math.min(m.progress_to_800_pct||0,100)}%;transition:width 0.6s ease"></div>
         </div>
+        ${(() => {
+          const remaining = 800 - (m.active_count||0);
+          const net = m.net_growth||0;
+          if (net > 0) {
+            const weeksLeft = Math.ceil(remaining / net);
+            const monthsLeft = Math.round(weeksLeft / 4.3);
+            return `<div style="font-size:11px;color:var(--ink-3)">At +${net}/week net growth → <strong style="color:var(--ink-2)">${monthsLeft} months to full capacity</strong> · ${remaining} members to go</div>`;
+          } else if (net === 0) {
+            return `<div style="font-size:11px;color:var(--amber)">No net growth this week — trajectory stalled</div>`;
+          } else {
+            return `<div style="font-size:11px;color:var(--red)">Net loss of ${Math.abs(net)} this week — moving away from target</div>`;
+          }
+        })()}
       </div>
     </div>
 
@@ -467,7 +493,8 @@ function renderDashboard() {
 
         <!-- MRR context card -->
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Founder Membership Revenue</div>
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Founder Membership Revenue</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-bottom:14px">Monthly recurring — not comparable to weekly sales below</div>
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
             <span style="font-size:13px;color:var(--ink-2)">MRR (this month)</span>
             <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--green)">${fmtC(r.mrr)}</span>
@@ -484,17 +511,18 @@ function renderDashboard() {
 
         <!-- Weekly sales context -->
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Weekly Sales (Non-Membership)</div>
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Weekly Sales (Non-Membership)</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-bottom:14px">This week only — packs, single classes, retail</div>
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
             <span style="font-size:13px;color:var(--ink-2)">Packs & single classes</span>
             <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--ink)">${fmtC(r.pack_and_class||r.total_weekly)}</span>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">
-            <span style="font-size:13px;color:var(--ink-2)">MRR as % of total</span>
-            <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">${r.mrr_pct||0}%</span>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;padding-top:10px;border-top:1px solid var(--border)">
+            <span style="font-size:13px;font-weight:600;color:var(--ink-2)">MRR mix</span>
+            <span style="font-family:var(--mono);font-size:20px;font-weight:700;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">${r.mrr_pct||0}%</span>
           </div>
           <div style="background:${(r.mrr_pct||0)>=70?'var(--green-light)':'var(--amber-light)'};border-radius:6px;padding:8px 12px;font-size:12px;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">
-            ${(r.mrr_pct||0)>=70?'✓ MRR target met (>70%)':'↑ Pack buyers this week are conversion opportunities — each one is a potential Founder Member'}
+            ${(r.mrr_pct||0)>=70?'✓ MRR target met — healthy revenue mix (>70%)':'↑ Pack buyers are conversion opportunities — each is a potential Founder Member at $149/month'}
           </div>
         </div>
 
@@ -505,10 +533,16 @@ function renderDashboard() {
 
     <!-- ─── 4. DORIAN'S LIST ─────────────────────────────────────── -->
     <div style="margin-bottom:48px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px">
         <div>
           <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Dorian's Action List</div>
-          <div style="font-size:13px;color:var(--ink-2)">${atRiskCount} Founder Members to contact · ${newFounders.length} new members need follow-up</div>
+          <div style="font-size:13px;color:var(--ink-2);margin-bottom:4px">${atRiskCount} Founder Members to contact · ${newFounders.length} new members need follow-up</div>
+          ${(() => {
+            const mrrAtRisk = ((dorian.critical||[]).length + (dorian.watch||[]).length) * 149;
+            return mrrAtRisk > 0
+              ? `<div style="font-size:12px;font-weight:600;color:var(--red)">${fmtC(mrrAtRisk)}/month MRR at risk from critical + watch members</div>`
+              : '';
+          })()}
         </div>
         <button class="btn-primary" onclick="handleDorianDownload()">⬇ Download CSV</button>
       </div>
@@ -561,7 +595,11 @@ function renderDashboard() {
                 <div style="font-size:11px;color:var(--ink-3)">${cl.founder_visits} Founder visits · ${cl.founder_pct}% of class</div>
               </div>
             </div>`).join('')}
-          ${!(c.founder_classes||[]).length ? '<div style="font-size:13px;color:var(--ink-3)">No data available</div>' : ''}
+          ${!(c.founder_classes||[]).filter(cl => !cl.name.toLowerCase().includes('reformer')).length ? `
+            <div style="background:var(--surface-2);border-radius:var(--radius);padding:14px;font-size:13px;color:var(--ink-3);line-height:1.5">
+              Founder visit data could not be matched this week. This usually means Client IDs in the attendance report didn't join to the retention management file.
+              <div style="margin-top:6px;font-size:12px">Total check-ins of ${(a.total_visits||0).toLocaleString()} are shown in the All Classes panel →</div>
+            </div>` : ''}
         </div>
 
         <!-- All classes by total visits -->
@@ -573,7 +611,7 @@ function renderDashboard() {
               <div style="width:22px;height:22px;border-radius:50%;background:var(--surface-2);color:var(--ink-2);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
               <div style="flex:1">
                 <div style="font-size:13px;font-weight:500;color:var(--ink)">${cl.name}</div>
-                <div style="font-size:11px;color:var(--ink-3)">${cl.visits} total · ${cl.founder_visits||0} Founders</div>
+                <div style="font-size:11px;color:var(--ink-3)">${cl.visits} total · ${cl.founder_visits||0} Founders${cl.visits > 0 && (cl.founder_visits||0) > 0 ? ' (' + Math.round((cl.founder_visits||0)/cl.visits*100) + '%)' : ''}</div>
               </div>
             </div>`).join('')}
         </div>
