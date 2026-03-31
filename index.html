@@ -285,16 +285,68 @@ function renderUpload() {
   </div>`;
 }
 
-// ─── Dashboard placeholder ────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────
+function fmtC(n) { return '$' + (n||0).toLocaleString(); }
+function fmtPct(n) { return (n||0) + '%'; }
+function metricCard(label, value, sub, accentColor) {
+  const color = accentColor || 'var(--ink)';
+  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;box-shadow:var(--shadow)">
+    <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:10px">${label}</div>
+    <div style="font-family:var(--display);font-size:28px;color:${color};line-height:1.1">${value}</div>
+    ${sub ? `<div style="font-size:12px;color:var(--ink-3);margin-top:6px">${sub}</div>` : ''}
+  </div>`;
+}
+function sectionHeader(title, sub) {
+  return `<div style="margin-bottom:20px">
+    <div style="font-family:var(--display);font-size:22px;color:var(--ink)">${title}</div>
+    ${sub ? `<div style="font-size:13px;color:var(--ink-3);margin-top:3px">${sub}</div>` : ''}
+  </div>`;
+}
+function divider() {
+  return `<div style="height:1px;background:var(--border);margin:40px 0"></div>`;
+}
+function downloadCSV(rows, filename) {
+  if (!rows || !rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const csv = [headers.join(','), ...rows.map(r => headers.map(h => '"' + (r[h]||'').toString().replace(/"/g,'""') + '"').join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = filename;
+  a.click();
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────
 function renderDashboard() {
   const d = state.dashData;
+  const c = d.current;
+  const p = d.previous;
+  const r = c.revenue || {};
+  const m = c.membership || {};
+  const a = c.attendance || {};
+  const dorian = c.dorian || {};
+  const intel = c.intelligence || {};
+
+  const wowDelta = (curr, prev, isC) => {
+    if (!p || prev === undefined || prev === null) return '';
+    const diff = curr - prev;
+    if (diff === 0) return '';
+    const sign = diff > 0 ? '+' : '';
+    const val = isC ? fmtC(Math.abs(diff)) : Math.abs(diff);
+    const color = diff > 0 ? 'var(--green)' : 'var(--red)';
+    return `<span style="font-size:11px;color:${color};margin-left:6px">${sign}${isC ? (diff>0?'':'-') + val : sign + val} vs last week</span>`;
+  };
+
+  const atRiskCount = (dorian.critical||[]).length + (dorian.watch||[]).length + (dorian.lost||[]).length;
+
   return `
   <div style="max-width:1100px;margin:0 auto;padding:40px 32px 80px" class="fu">
+
+    <!-- Header -->
     <div class="dash-header">
       <div class="logo">P</div>
       <div>
         <div class="brand-name">Prana Wellness Club</div>
-        <div class="brand-sub">Week of ${d.current?.week_of || ''}</div>
+        <div class="brand-sub">Week of ${c.week_of || ''}</div>
       </div>
       <div class="dash-actions">
         ${state.weeks.length > 1 ? `
@@ -305,12 +357,166 @@ function renderDashboard() {
         <button class="btn-secondary" onclick="showUpload()">↑ Upload new week</button>
       </div>
     </div>
-    <div style="border:1px dashed var(--border);border-radius:var(--radius-lg);padding:60px 32px;text-align:center">
-      <div style="font-family:var(--display);font-size:22px;color:var(--ink);margin-bottom:8px">Data loaded ✓</div>
-      <div style="font-size:13px;color:var(--ink-3)">Dashboard panels coming in the next pieces.</div>
-      <div style="font-family:var(--mono);font-size:11px;color:var(--green);margin-top:12px">Week: ${d.current?.week_of} · Active members: ${d.current?.membership?.active_count ?? '—'} · Revenue: $${(d.current?.revenue?.total_weekly ?? 0).toLocaleString()}</div>
+
+    <!-- Intelligence Panel -->
+    <div style="margin-bottom:40px">
+      ${sectionHeader('Weekly Intelligence', 'AI-generated tactical briefing')}
+      <div style="background:var(--ink);border-radius:var(--radius-lg);padding:24px 28px;margin-bottom:14px">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:rgba(255,255,255,0.4);text-transform:uppercase;margin-bottom:10px">THIS WEEK</div>
+        <div style="font-family:var(--display);font-size:20px;color:#fff;line-height:1.5">${intel.headline || '—'}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div style="background:var(--red-light);border:1px solid var(--red);border-radius:var(--radius-lg);padding:18px 20px">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--red);text-transform:uppercase;margin-bottom:10px">⚠ Risk</div>
+          <div style="font-size:14px;color:var(--ink);line-height:1.5">${intel.risk || '—'}</div>
+        </div>
+        <div style="background:var(--green-light);border:1px solid var(--green);border-radius:var(--radius-lg);padding:18px 20px">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--green);text-transform:uppercase;margin-bottom:10px">✦ Bright Spot</div>
+          <div style="font-size:14px;color:var(--ink);line-height:1.5">${intel.bright_spot || '—'}</div>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;box-shadow:var(--shadow)">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">TOP 3 ACTIONS</div>
+        ${(intel.actions||[]).map((a,i) => `
+          <div style="display:flex;gap:12px;margin-bottom:${i<2?'12px':'0'}">
+            <div style="width:24px;height:24px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${i+1}</div>
+            <div style="font-size:14px;color:var(--ink);line-height:1.5">${a}</div>
+          </div>`).join('')}
+      </div>
     </div>
+
+    ${divider()}
+
+    <!-- Revenue Panel -->
+    <div style="margin-bottom:40px">
+      ${sectionHeader('Revenue', 'Week of ' + (c.week_of||''))}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px">
+        ${metricCard('Total Weekly Revenue', fmtC(r.total_weekly), null)}
+        ${metricCard('MRR — Recurring Only', fmtC(r.mrr), fmtPct(r.mrr_pct) + ' of total · target >70%', r.mrr_pct >= 70 ? 'var(--green)' : 'var(--amber)')}
+        ${metricCard('Pack & Class Revenue', fmtC(r.pack_and_class), 'Non-membership sales')}
+        ${metricCard('Revenue per Member', fmtC(r.revenue_per_member), 'Across ' + m.active_count + ' active members')}
+      </div>
+    </div>
+
+    ${divider()}
+
+    <!-- Membership Panel -->
+    <div style="margin-bottom:40px">
+      ${sectionHeader('Membership', 'Growth, churn & conversion')}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:16px">
+        ${metricCard('Active Members', m.active_count, 'Target: 800')}
+        ${metricCard('New This Week', m.new_this_week, 'First-time members')}
+        ${metricCard('Churned This Week', m.churned_this_week, fmtPct(m.churn_rate_pct) + ' churn rate', m.churned_this_week > 0 ? 'var(--red)' : undefined)}
+        ${metricCard('Net Growth', (m.net_growth > 0 ? '+' : '') + m.net_growth, 'New minus churned', m.net_growth > 0 ? 'var(--green)' : m.net_growth < 0 ? 'var(--red)' : undefined)}
+      </div>
+      <!-- Progress bar -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;box-shadow:var(--shadow)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase">Progress to Full Capacity</div>
+          <div style="font-family:var(--mono);font-size:12px;color:var(--green)">${m.active_count} / 800</div>
+        </div>
+        <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+          <div style="height:100%;background:var(--green);border-radius:4px;width:${Math.min(m.progress_to_800_pct||0,100)}%;transition:width 0.6s ease"></div>
+        </div>
+        <div style="font-size:12px;color:var(--ink-3);margin-top:8px">${800 - (m.active_count||0)} members to go · ${m.progress_to_800_pct}% full</div>
+      </div>
+    </div>
+
+    ${divider()}
+
+    <!-- Dorian's Action List -->
+    <div style="margin-bottom:40px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+        ${sectionHeader("Dorian's Action List", atRiskCount + ' members to contact this week')}
+        <button class="btn-primary" onclick="handleDorianDownload()" style="margin-top:0">⬇ Download CSV</button>
+      </div>
+      ${renderDorianList(dorian)}
+    </div>
+
+    ${divider()}
+
+    <!-- Attendance Panel -->
+    <div style="margin-bottom:40px">
+      ${sectionHeader('Attendance & Classes', 'Fill rate, performance and no-shows')}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:20px">
+        ${metricCard('Avg Class Fill Rate', fmtPct(a.avg_fill_rate_pct), 'Across all classes this week', a.avg_fill_rate_pct >= 70 ? 'var(--green)' : a.avg_fill_rate_pct >= 50 ? 'var(--amber)' : 'var(--red)')}
+        ${metricCard('Total Visits', (a.total_visits||0).toLocaleString(), 'Check-ins this week')}
+        ${metricCard('No-Show Rate', fmtPct(a.no_show_rate_pct), 'Paid but did not attend', a.no_show_rate_pct > 15 ? 'var(--red)' : a.no_show_rate_pct > 8 ? 'var(--amber)' : 'var(--green)')}
+      </div>
+      ${(a.top_classes||[]).length > 0 ? `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Top Classes</div>
+          ${(a.top_classes||[]).map((c,i) => `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:${i<(a.top_classes.length-1)?'10px':'0'}">
+              <div style="width:24px;height:24px;border-radius:50%;background:var(--green-light);color:var(--green);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:500;color:var(--ink)">${c.name}</div>
+                <div style="font-size:11px;color:var(--ink-3)">${c.visits} visits · ${c.fill_rate_pct}% full</div>
+              </div>
+            </div>`).join('')}
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Lowest Attendance</div>
+          ${(a.bottom_classes||[]).map((c,i) => `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:${i<(a.bottom_classes.length-1)?'10px':'0'}">
+              <div style="width:24px;height:24px;border-radius:50%;background:var(--red-light);color:var(--red);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:500;color:var(--ink)">${c.name}</div>
+                <div style="font-size:11px;color:var(--ink-3)">${c.visits} visits · ${c.fill_rate_pct}% full</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>` : ''}
+    </div>
+
   </div>`;
+}
+
+// ─── Dorian list renderer ─────────────────────────────────────────
+function renderDorianList(dorian) {
+  const tiers = [
+    { key: 'critical', label: '🔴 Critical', color: 'var(--red)',   bg: 'var(--red-light)',    desc: '14–29 days no visit' },
+    { key: 'watch',    label: '🟡 Watch',    color: 'var(--amber)', bg: 'var(--amber-light)',  desc: '8–13 days no visit' },
+    { key: 'lost',     label: '⚫ Lost',     color: 'var(--ink-2)', bg: 'var(--surface-2)',    desc: '30+ days no visit' },
+    { key: 'win_back', label: '♻ Win-Back', color: 'var(--green)', bg: 'var(--green-light)',  desc: 'Cancelled this week' },
+  ];
+
+  return tiers.map(tier => {
+    const members = dorian[tier.key] || [];
+    if (!members.length) return `
+      <div style="margin-bottom:12px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--ink-3);font-size:13px">
+        <strong style="color:${tier.color}">${tier.label}</strong> — No members in this category
+      </div>`;
+
+    return `
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;font-weight:600;color:${tier.color};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">${tier.label} · ${tier.desc} · ${members.length} member${members.length>1?'s':''}</div>
+        ${members.map(m => `
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;background:${tier.bg};border:1px solid var(--border);border-left:3px solid ${tier.color};border-radius:var(--radius);margin-bottom:6px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:3px">${m.name}</div>
+              <div style="font-size:12px;color:var(--ink-3)">${[m.membership, m.email, m.phone].filter(Boolean).join(' · ')}</div>
+              ${m.member_since ? `<div style="font-size:11px;color:var(--ink-3);margin-top:2px">Member since ${m.member_since}${m.lifetime_visits ? ' · ' + m.lifetime_visits + ' lifetime visits' : ''}</div>` : ''}
+              ${m.cancel_date ? `<div style="font-size:11px;color:var(--ink-3);margin-top:2px">Cancelled: ${m.cancel_date}</div>` : ''}
+            </div>
+            ${m.days_since_visit ? `<div style="font-family:var(--mono);font-size:13px;font-weight:500;color:${tier.color};white-space:nowrap">${m.days_since_visit}d ago</div>` : ''}
+          </div>`).join('')}
+      </div>`;
+  }).join('');
+}
+
+// ─── Dorian CSV download ──────────────────────────────────────────
+function handleDorianDownload() {
+  const dorian = state.dashData?.current?.dorian || {};
+  const all = [
+    ...(dorian.critical||[]).map(m => ({...m, priority:'Critical'})),
+    ...(dorian.watch||[]).map(m => ({...m, priority:'Watch'})),
+    ...(dorian.lost||[]).map(m => ({...m, priority:'Lost'})),
+    ...(dorian.win_back||[]).map(m => ({...m, priority:'Win-Back'})),
+  ];
+  if (!all.length) return alert('No members in action list.');
+  downloadCSV(all, 'dorian-action-list-' + (state.dashData?.current?.week_of||'') + '.csv');
 }
 
 // ─── Shared header ────────────────────────────────────────────────
