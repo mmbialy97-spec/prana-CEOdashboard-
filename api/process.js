@@ -101,22 +101,32 @@ function buildPrompt(data) {
   return `You are the business intelligence engine for Prana Wellness Club, a boutique fitness studio in Austin, Texas.
 
 ABOUT PRANA:
-- Target: 800 members at full capacity
-- Services: Pilates Reformer, Mat Pilates, Vinyasa Yoga, Sculpt, Yin, Private sessions
-- Revenue model: Monthly autopay memberships (MRR) + single sessions + class packs
-- Key staff: Dorian owns member retention and outreach
-- MRR target: >70% of total revenue should be recurring
+- Target: 800 Founder Members at full capacity
+- Services: Pilates Reformer, Heated Sculpt, Heated Mat Pilates, Prana Vinyasa Flow, Yin, Private
+- Revenue model: Founder Membership autopay ($149/month) is the ONLY revenue that matters for MRR
+- Key staff: Dorian owns Founder Member retention and outreach
+- MRR target: >70% of total revenue should be Founder Member autopay
+- CRITICAL: Only reference Founder Members in all analysis. Never mention ClassPass, Friends and Family, or drop-ins except as an acquisition opportunity in bright_spot only.
+- Reformer Pilates is NOT included in any Founder Membership — it is a separate paid service. Do not include Reformer Pilates in class analysis for Founder Members.
+- Founder Membership (Unlimited) covers: Yoga, Sculpt, Mat Pilates, Vinyasa, Yin — these are the classes Founders should be attending
+- founder_classes in the data shows which classes Founders actually attend and what % of each class they make up
 
 IMPORTANT DATA NOTES:
-- sales_total = weekly non-recurring sales this week only
-- autopay_total = MRR (full monthly autopay billing cycle, not just one week)
+- sales_total = weekly non-recurring sales (secondary metric)
+- autopay_total = MRR from Founder Members only (full monthly billing cycle)
 - These are DIFFERENT time periods — do not subtract one from the other
 - revenue_per_member = round(autopay_total / active_count)
-- first_visit_count = new FOUNDER MEMBERS who started a Founder Membership this week
-- first_time_visitors = total first-time visitors this week including ClassPass and drop-ins (not members)
-- active_count = Founder Members only (85) — these are the paying autopay members
-- autopay_total = MRR from Founder Members only
-- class_data has no capacity info — set all fill_rate_pct to 0, set avg_fill_rate_pct to 0
+- first_visit_count = new Founder Members who joined this week
+- first_time_visitors = first-time studio visitors this week (ClassPass, drop-ins) — only mention as acquisition pipeline
+- active_count = Founder Members only
+- no_return_members = Founder Members only who have not visited
+- class_data = this week's actual class attendance. Each entry has: name, visits (total all clients), founder_visits (Founder Members only), founder_pct (% of class that are Founders). Set fill_rate_pct to 0 (no capacity data)
+- avg_founder_visits = average visits per Founder Member this week. Target is 3+/week. Below 2 is a retention warning.
+- founder_classes = class_data sorted by founder_pct — the classes Founder Members actually attend most
+- health_summary = counts of {green: 3+visits/month, amber: 1-2/month, red: 0 visits or 21+ days absent}
+- In intelligence, reference avg_founder_visits and which classes Founders prefer vs drop-ins
+- founder_classes = classes sorted by Founder Member engagement (founder_pct = % of class that are Founders)
+- Reformer Pilates is excluded from Founder Membership analysis — it is a paid add-on
 
 CALCULATION RULES:
 - mrr = autopay_total
@@ -140,11 +150,23 @@ CALCULATION RULES:
 WEEKLY DATA:
 ${JSON.stringify(data)}
 
-INTELLIGENCE — BE SPECIFIC AND TACTICAL. Reference real names, numbers, class names from the data:
-- headline: one punchy sentence about the most important business reality this week
-- actions: 3 very specific actions. Good example: "Call [specific member name] — [X] lifetime visits, [Y] days absent, high churn risk". Bad example: "Contact at-risk members"
-- risk: most important threat with specific numbers
-- bright_spot: one specific thing to double down on
+INTELLIGENCE — BE HYPER-SPECIFIC AND TACTICAL. Only reference Founder Members.
+
+headline: One punchy sentence capturing the single most important business reality this week for Founder Members.
+
+actions: 3 specific, immediately actionable items. Each must:
+- Name a specific Founder Member by name with their phone number
+- State exactly why they need contact (days absent, lifetime visits, churn signal)
+- Tell Dorian exactly what to say or offer
+Example: "Call Sarah Johnson (512-555-0101) — Founder Member, 47 lifetime visits, 18 days absent since 3/13 — she is your most valuable at-risk member, offer a complimentary class to bring her back"
+
+risk: The single most urgent threat to Founder Member MRR with specific numbers. Reference churn_signal patterns from cancelled_members if relevant.
+
+bright_spot: One specific Founder Member metric or pattern to amplify. Be concrete.
+
+New Founder Members (new_founder_members) who have 0 visits should be flagged — they paid but haven't shown up yet, highest early churn risk.
+Cancelled members with churn_signal=never_formed_habit means they left before forming a habit — this is an onboarding problem.
+Health summary: green=${health_summary.green}, amber=${health_summary.amber}, red=${health_summary.red} — use these numbers in your analysis.
 
 RETURN ONLY THIS JSON, NOTHING ELSE:
 {"revenue":{"total_weekly":0,"mrr":0,"mrr_pct":0,"pack_and_class":0,"revenue_per_member":0},"membership":{"active_count":0,"new_this_week":0,"churned_this_week":0,"net_growth":0,"churn_rate_pct":0,"retention_rate_pct":0,"progress_to_800_pct":0},"attendance":{"avg_fill_rate_pct":0,"total_visits":0,"no_show_rate_pct":0,"top_classes":[{"name":"","visits":0,"fill_rate_pct":0}],"bottom_classes":[{"name":"","visits":0,"fill_rate_pct":0}]},"dorian":{"critical":[{"name":"","email":"","phone":"","membership":"","last_visit":"","days_since_visit":0,"lifetime_visits":0,"member_since":""}],"watch":[],"lost":[],"win_back":[{"name":"","email":"","phone":"","membership":"","cancel_date":""}]},"intelligence":{"headline":"","actions":["","",""],"risk":"","bright_spot":""},"warnings":[]}`;
