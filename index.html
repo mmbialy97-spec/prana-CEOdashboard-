@@ -15,6 +15,7 @@
   --ink:#1A1A18;--ink-2:#5A5A56;--ink-3:#9A9A94;
   --amber:#C17F24;--amber-light:#FDF3E3;
   --red:#B94040;--red-light:#FBEAEA;
+  --surface-2:#F0EDE8;
   --body:'DM Sans',system-ui,sans-serif;
   --display:'DM Serif Display',Georgia,serif;
   --mono:'DM Mono',monospace;
@@ -320,161 +321,305 @@ function renderDashboard() {
   const d = state.dashData;
   const c = d.current;
   const p = d.previous;
-  const r = c.revenue || {};
-  const m = c.membership || {};
-  const a = c.attendance || {};
-  const dorian = c.dorian || {};
-  const intel = c.intelligence || {};
-
-  const wowDelta = (curr, prev, isC) => {
-    if (!p || prev === undefined || prev === null) return '';
-    const diff = curr - prev;
-    if (diff === 0) return '';
-    const sign = diff > 0 ? '+' : '';
-    const val = isC ? fmtC(Math.abs(diff)) : Math.abs(diff);
-    const color = diff > 0 ? 'var(--green)' : 'var(--red)';
-    return `<span style="font-size:11px;color:${color};margin-left:6px">${sign}${isC ? (diff>0?'':'-') + val : sign + val} vs last week</span>`;
-  };
+  const r  = c.revenue    || {};
+  const m  = c.membership || {};
+  const a  = c.attendance  || {};
+  const dorian = c.dorian  || {};
+  const intel  = c.intelligence || {};
+  const hs     = c.health_summary || {};
 
   const atRiskCount = (dorian.critical||[]).length + (dorian.watch||[]).length + (dorian.lost||[]).length;
+  const newFounders  = c.new_founder_members || [];
+
+  // WoW delta helper
+  const wow = (curr, prev, isC) => {
+    if (!p || prev == null) return '';
+    const diff = curr - prev;
+    if (diff === 0) return '';
+    const color = diff > 0 ? 'var(--green)' : 'var(--red)';
+    const label = isC ? fmtC(Math.abs(diff)) : Math.abs(diff);
+    const sign  = diff > 0 ? '+' : '−';
+    return `<span style="font-size:11px;color:${color};margin-left:6px;font-weight:500">${sign}${label} vs last week</span>`;
+  };
 
   return `
   <div style="max-width:1100px;margin:0 auto;padding:40px 32px 80px" class="fu">
 
-    <!-- Header -->
-    <div class="dash-header">
+    <!-- ─── HEADER ──────────────────────────────────────────────── -->
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:40px;padding-bottom:24px;border-bottom:1px solid var(--border)">
       <div class="logo">P</div>
       <div>
         <div class="brand-name">Prana Wellness Club</div>
-        <div class="brand-sub">Week of ${c.week_of || ''}</div>
+        <div class="brand-sub">Week of ${c.week_of||''} · Founder Member Dashboard</div>
       </div>
-      <div class="dash-actions">
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
         ${state.weeks.length > 1 ? `
           <select class="week-select" onchange="switchWeek(this.value)">
-            ${state.weeks.map(w => `<option value="${w.week_of}" ${w.week_of === state.selectedWeek ? 'selected' : ''}>${w.week_of}</option>`).join('')}
-          </select>
-        ` : ''}
+            ${state.weeks.map(w => `<option value="${w.week_of}" ${w.week_of===state.selectedWeek?'selected':''}>${w.week_of}</option>`).join('')}
+          </select>` : ''}
         <button class="btn-secondary" onclick="showUpload()">↑ Upload new week</button>
       </div>
     </div>
 
-    <!-- Intelligence Panel -->
-    <div style="margin-bottom:40px">
-      ${sectionHeader('Weekly Intelligence', 'AI-generated tactical briefing')}
-      <div style="background:var(--ink);border-radius:var(--radius-lg);padding:24px 28px;margin-bottom:14px">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:rgba(255,255,255,0.4);text-transform:uppercase;margin-bottom:10px">THIS WEEK</div>
-        <div style="font-family:var(--display);font-size:20px;color:#fff;line-height:1.5">${intel.headline || '—'}</div>
+    <!-- ─── 1. INTELLIGENCE ──────────────────────────────────────── -->
+    <div style="margin-bottom:48px">
+      <!-- Headline -->
+      <div style="background:var(--ink);border-radius:var(--radius-lg);padding:28px 32px;margin-bottom:12px">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.14em;color:rgba(255,255,255,0.35);text-transform:uppercase;margin-bottom:12px">THIS WEEK · PRANA WELLNESS</div>
+        <div style="font-family:var(--display);font-size:22px;color:#fff;line-height:1.5;max-width:800px">${intel.headline||'—'}</div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-        <div style="background:var(--red-light);border:1px solid var(--red);border-radius:var(--radius-lg);padding:18px 20px">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--red);text-transform:uppercase;margin-bottom:10px">⚠ Risk</div>
-          <div style="font-size:14px;color:var(--ink);line-height:1.5">${intel.risk || '—'}</div>
+
+      <!-- Actions row -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px 26px;margin-bottom:12px;box-shadow:var(--shadow)">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">TOP 3 ACTIONS THIS WEEK</div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          ${(intel.actions||[]).map((act,i) => `
+            <div style="display:flex;gap:14px;align-items:flex-start">
+              <div style="width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${i+1}</div>
+              <div style="font-size:14px;color:var(--ink);line-height:1.6;padding-top:2px">${act}</div>
+            </div>`).join('')}
         </div>
-        <div style="background:var(--green-light);border:1px solid var(--green);border-radius:var(--radius-lg);padding:18px 20px">
+      </div>
+
+      <!-- Risk + Bright Spot -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="background:var(--red-light);border:1px solid var(--red);border-radius:var(--radius-lg);padding:18px 22px">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--red);text-transform:uppercase;margin-bottom:10px">⚠ Risk This Week</div>
+          <div style="font-size:14px;color:var(--ink);line-height:1.6">${intel.risk||'—'}</div>
+        </div>
+        <div style="background:var(--green-light);border:1px solid var(--green);border-radius:var(--radius-lg);padding:18px 22px">
           <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--green);text-transform:uppercase;margin-bottom:10px">✦ Bright Spot</div>
-          <div style="font-size:14px;color:var(--ink);line-height:1.5">${intel.bright_spot || '—'}</div>
+          <div style="font-size:14px;color:var(--ink);line-height:1.6">${intel.bright_spot||'—'}</div>
         </div>
       </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;box-shadow:var(--shadow)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">TOP 3 ACTIONS</div>
-        ${(intel.actions||[]).map((a,i) => `
-          <div style="display:flex;gap:12px;margin-bottom:${i<2?'12px':'0'}">
-            <div style="width:24px;height:24px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${i+1}</div>
-            <div style="font-size:14px;color:var(--ink);line-height:1.5">${a}</div>
-          </div>`).join('')}
-      </div>
     </div>
 
     ${divider()}
 
-    <!-- Revenue Panel -->
-    <div style="margin-bottom:40px">
-      ${sectionHeader('Revenue', 'Week of ' + (c.week_of||''))}
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px">
-        ${metricCard('Weekly Sales Revenue', fmtC(r.total_weekly), 'Non-recurring sales this week')}
-        ${metricCard('MRR — Monthly Recurring', fmtC(r.mrr), 'Autopay memberships this month')}
-        ${metricCard('Forecasted ARR', fmtC(r.mrr * 12), 'MRR × 12', 'var(--green)')}
-        ${metricCard('Revenue per Member', fmtC(r.revenue_per_member), 'MRR ÷ ' + m.active_count + ' active members')}
-      </div>
-    </div>
+    <!-- ─── 2. KEY NUMBERS ───────────────────────────────────────── -->
+    <div style="margin-bottom:48px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Founder Member Pulse</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px">
 
-    ${divider()}
-
-    <!-- Membership Panel -->
-    <div style="margin-bottom:40px">
-      ${sectionHeader('Membership', 'Growth, churn & conversion')}
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:16px">
-        ${metricCard('Active Members', m.active_count, 'Target: 800')}
-        ${metricCard('New This Week', m.new_this_week, 'First-time members')}
-        ${metricCard('Churned This Week', m.churned_this_week, fmtPct(m.churn_rate_pct) + ' churn rate', m.churned_this_week > 0 ? 'var(--red)' : undefined)}
-        ${metricCard('Net Growth', (m.net_growth > 0 ? '+' : '') + m.net_growth, 'New minus churned', m.net_growth > 0 ? 'var(--green)' : m.net_growth < 0 ? 'var(--red)' : undefined)}
-      </div>
-      <!-- Progress bar -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;box-shadow:var(--shadow)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase">Progress to Full Capacity</div>
-          <div style="font-family:var(--mono);font-size:12px;color:var(--green)">${m.active_count} / 800</div>
+        <!-- MRR -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">MRR</div>
+          <div style="font-family:var(--display);font-size:28px;color:var(--green);line-height:1">${fmtC(r.mrr)}</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:6px">Monthly recurring · ${fmtC(r.mrr*12)} ARR</div>
+          ${wow(r.mrr, p?.revenue?.mrr, true)}
         </div>
-        <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
-          <div style="height:100%;background:var(--green);border-radius:4px;width:${Math.min(m.progress_to_800_pct||0,100)}%;transition:width 0.6s ease"></div>
+
+        <!-- Active Members -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Founder Members</div>
+          <div style="font-family:var(--display);font-size:28px;color:var(--ink);line-height:1">${m.active_count||'—'}</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:6px">${800-(m.active_count||0)} to full capacity</div>
+          ${wow(m.active_count, p?.membership?.active_count, false)}
         </div>
-        <div style="font-size:12px;color:var(--ink-3);margin-top:8px">${800 - (m.active_count||0)} members to go · ${m.progress_to_800_pct}% full</div>
+
+        <!-- Net Growth -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Net Growth</div>
+          <div style="font-family:var(--display);font-size:28px;color:${(m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)'};line-height:1">${(m.net_growth||0)>0?'+':''}${m.net_growth||0}</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:6px">${m.new_this_week||0} joined · ${m.churned_this_week||0} churned</div>
+        </div>
+
+        <!-- Member Health -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Member Health</div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px">
+            <span style="font-family:var(--display);font-size:28px;color:var(--green);line-height:1">${hs.green||0}</span>
+            <span style="font-size:13px;color:var(--ink-3)">healthy</span>
+          </div>
+          <div style="display:flex;gap:10px;font-size:11px">
+            <span style="color:var(--amber)">● ${hs.amber||0} at risk</span>
+            <span style="color:var(--red)">● ${hs.red||0} urgent</span>
+          </div>
+        </div>
+
+        <!-- Avg visits per founder -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Avg Visits / Founder</div>
+          <div style="font-family:var(--display);font-size:28px;color:${(c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)'};line-height:1">${c.avg_founder_visits||0}</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:6px">This week · target 3+</div>
+        </div>
+
+      </div>
+
+      <!-- Progress bar to 800 -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;margin-top:12px;box-shadow:var(--shadow)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:12px;color:var(--ink-2);font-weight:500">Progress to 800 Founder Members</div>
+          <div style="font-family:var(--mono);font-size:12px;color:var(--green)">${m.active_count||0} / 800 · ${m.progress_to_800_pct||0}%</div>
+        </div>
+        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+          <div style="height:100%;background:var(--green);border-radius:3px;width:${Math.min(m.progress_to_800_pct||0,100)}%;transition:width 0.6s ease"></div>
+        </div>
       </div>
     </div>
 
     ${divider()}
 
-    <!-- Dorian's Action List -->
-    <div style="margin-bottom:40px">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-        ${sectionHeader("Dorian's Action List", atRiskCount + ' members to contact this week')}
-        <button class="btn-primary" onclick="handleDorianDownload()" style="margin-top:0">⬇ Download CSV</button>
+    <!-- ─── 3. REVENUE ───────────────────────────────────────────── -->
+    <div style="margin-bottom:48px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Revenue Breakdown</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+
+        <!-- MRR context card -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Founder Membership Revenue</div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+            <span style="font-size:13px;color:var(--ink-2)">MRR (this month)</span>
+            <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--green)">${fmtC(r.mrr)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+            <span style="font-size:13px;color:var(--ink-2)">Forecasted ARR</span>
+            <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--green)">${fmtC(r.mrr*12)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:10px;border-top:1px solid var(--border)">
+            <span style="font-size:13px;color:var(--ink-2)">Per Founder Member / month</span>
+            <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--ink)">${fmtC(r.revenue_per_member)}</span>
+          </div>
+        </div>
+
+        <!-- Weekly sales context -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Weekly Sales (Non-Membership)</div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+            <span style="font-size:13px;color:var(--ink-2)">Packs & single classes</span>
+            <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--ink)">${fmtC(r.pack_and_class||r.total_weekly)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">
+            <span style="font-size:13px;color:var(--ink-2)">MRR as % of total</span>
+            <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">${r.mrr_pct||0}%</span>
+          </div>
+          <div style="background:${(r.mrr_pct||0)>=70?'var(--green-light)':'var(--amber-light)'};border-radius:6px;padding:8px 12px;font-size:12px;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">
+            ${(r.mrr_pct||0)>=70?'✓ MRR target met (>70%)':'↑ Pack buyers this week are conversion opportunities — each one is a potential Founder Member'}
+          </div>
+        </div>
+
       </div>
-      ${renderDorianList(dorian)}
     </div>
 
     ${divider()}
 
-    <!-- Attendance Panel -->
-    <div style="margin-bottom:40px">
-      ${sectionHeader('Attendance & Classes', 'Fill rate, performance and no-shows')}
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:20px">
-        ${metricCard('Avg Class Fill Rate', fmtPct(a.avg_fill_rate_pct), 'Across all classes this week', a.avg_fill_rate_pct >= 70 ? 'var(--green)' : a.avg_fill_rate_pct >= 50 ? 'var(--amber)' : 'var(--red)')}
-        ${metricCard('Total Visits', (a.total_visits||0).toLocaleString(), 'Check-ins this week')}
-        ${metricCard('No-Show Rate', fmtPct(a.no_show_rate_pct), 'Paid but did not attend', a.no_show_rate_pct > 15 ? 'var(--red)' : a.no_show_rate_pct > 8 ? 'var(--amber)' : 'var(--green)')}
+    <!-- ─── 4. DORIAN'S LIST ─────────────────────────────────────── -->
+    <div style="margin-bottom:48px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Dorian's Action List</div>
+          <div style="font-size:13px;color:var(--ink-2)">${atRiskCount} Founder Members to contact · ${newFounders.length} new members need follow-up</div>
+        </div>
+        <button class="btn-primary" onclick="handleDorianDownload()">⬇ Download CSV</button>
       </div>
-      ${(a.top_classes||[]).length > 0 ? `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Top Classes</div>
-          ${(a.top_classes||[]).map((c,i) => `
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:${i<(a.top_classes.length-1)?'10px':'0'}">
-              <div style="width:24px;height:24px;border-radius:50%;background:var(--green-light);color:var(--green);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+      ${renderHealthSummary(c)}
+      ${renderDorianList(dorian, newFounders)}
+    </div>
+
+    ${divider()}
+
+    <!-- ─── 5. ATTENDANCE ─────────────────────────────────────────── -->
+    <div style="margin-bottom:48px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Classes This Week</div>
+
+      <!-- Summary metrics -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Total Check-ins</div>
+          <div style="font-family:var(--display);font-size:28px;color:var(--ink)">${(a.total_visits||0).toLocaleString()}</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:4px">All visitors this week</div>
+        </div>
+        <div style="background:var(--green-light);border:1px solid var(--green);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--green);text-transform:uppercase;margin-bottom:8px">Founder Visits</div>
+          <div style="font-family:var(--display);font-size:28px;color:var(--green)">${(c.founder_classes||[]).reduce((s,cl)=>s+(cl.founder_visits||0),0)}</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:4px">${c.avg_founder_visits||0} avg per Founder Member</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Late Cancels</div>
+          <div style="font-family:var(--display);font-size:28px;color:${(a.no_show_rate_pct||0)>10?'var(--amber)':'var(--ink)'}">${a.no_show_rate_pct||0}%</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:4px">Of bookings cancelled late</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">First-Time Visitors</div>
+          <div style="font-family:var(--display);font-size:28px;color:var(--green)">${c.first_time_visitors||0}</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:4px">Acquisition pipeline</div>
+        </div>
+      </div>
+
+      <!-- Class breakdown -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+
+        <!-- Founder Member classes -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--green);text-transform:uppercase;margin-bottom:4px">Founder Member Classes</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-bottom:14px">Classes included in membership (excl. Reformer)</div>
+          ${(c.founder_classes||[]).filter(cl => !cl.name.toLowerCase().includes('reformer')).slice(0,6).map((cl,i) => `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <div style="width:22px;height:22px;border-radius:50%;background:var(--green-light);color:var(--green);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
               <div style="flex:1">
-                <div style="font-size:13px;font-weight:500;color:var(--ink)">${c.name}</div>
-                <div style="font-size:11px;color:var(--ink-3)">${c.visits} visits · ${c.fill_rate_pct}% full</div>
+                <div style="font-size:13px;font-weight:500;color:var(--ink)">${cl.name}</div>
+                <div style="font-size:11px;color:var(--ink-3)">${cl.founder_visits} Founder visits · ${cl.founder_pct}% of class</div>
+              </div>
+            </div>`).join('')}
+          ${!(c.founder_classes||[]).length ? '<div style="font-size:13px;color:var(--ink-3)">No data available</div>' : ''}
+        </div>
+
+        <!-- All classes by total visits -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">All Classes by Total Visits</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-bottom:14px">Includes ClassPass & drop-ins</div>
+          ${(a.top_classes||[]).slice(0,6).map((cl,i) => `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <div style="width:22px;height:22px;border-radius:50%;background:var(--surface-2);color:var(--ink-2);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:500;color:var(--ink)">${cl.name}</div>
+                <div style="font-size:11px;color:var(--ink-3)">${cl.visits} total · ${cl.founder_visits||0} Founders</div>
               </div>
             </div>`).join('')}
         </div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Lowest Attendance</div>
-          ${(a.bottom_classes||[]).map((c,i) => `
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:${i<(a.bottom_classes.length-1)?'10px':'0'}">
-              <div style="width:24px;height:24px;border-radius:50%;background:var(--red-light);color:var(--red);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
-              <div style="flex:1">
-                <div style="font-size:13px;font-weight:500;color:var(--ink)">${c.name}</div>
-                <div style="font-size:11px;color:var(--ink-3)">${c.visits} visits · ${c.fill_rate_pct}% full</div>
-              </div>
-            </div>`).join('')}
-        </div>
-      </div>` : ''}
+
+      </div>
     </div>
 
   </div>`;
 }
 
+// ─── Health summary renderer ─────────────────────────────────────
+function renderHealthSummary(c) {
+  const hs = c.health_summary || {};
+  const total = (hs.green||0) + (hs.amber||0) + (hs.red||0) + (hs.frozen||0);
+  if (!total) return '';
+  return `
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 22px;margin-bottom:20px;box-shadow:var(--shadow)">
+    <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Founder Member Health — ${total} total</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:100px;background:var(--green-light);border-radius:var(--radius);padding:12px 14px;text-align:center">
+        <div style="font-family:var(--display);font-size:24px;color:var(--green)">${hs.green||0}</div>
+        <div style="font-size:11px;color:var(--green);font-weight:500;margin-top:2px">● Healthy</div>
+        <div style="font-size:10px;color:var(--ink-3);margin-top:1px">3+ visits/month</div>
+      </div>
+      <div style="flex:1;min-width:100px;background:var(--amber-light);border-radius:var(--radius);padding:12px 14px;text-align:center">
+        <div style="font-family:var(--display);font-size:24px;color:var(--amber)">${hs.amber||0}</div>
+        <div style="font-size:11px;color:var(--amber);font-weight:500;margin-top:2px">● At Risk</div>
+        <div style="font-size:10px;color:var(--ink-3);margin-top:1px">1-2 visits/month</div>
+      </div>
+      <div style="flex:1;min-width:100px;background:var(--red-light);border-radius:var(--radius);padding:12px 14px;text-align:center">
+        <div style="font-family:var(--display);font-size:24px;color:var(--red)">${hs.red||0}</div>
+        <div style="font-size:11px;color:var(--red);font-weight:500;margin-top:2px">● Urgent</div>
+        <div style="font-size:10px;color:var(--ink-3);margin-top:1px">0 visits or 21+ days absent</div>
+      </div>
+      ${hs.frozen ? `
+      <div style="flex:1;min-width:100px;background:var(--surface-2);border-radius:var(--radius);padding:12px 14px;text-align:center">
+        <div style="font-family:var(--display);font-size:24px;color:var(--ink-3)">${hs.frozen}</div>
+        <div style="font-size:11px;color:var(--ink-3);font-weight:500;margin-top:2px">● Frozen</div>
+        <div style="font-size:10px;color:var(--ink-3);margin-top:1px">Membership paused</div>
+      </div>` : ''}
+    </div>
+  </div>`;
+}
+
 // ─── Dorian list renderer ─────────────────────────────────────────
-function renderDorianList(dorian) {
+function renderDorianList(dorian, newMembers) {
   const tiers = [
     { key: 'critical', label: '🔴 Critical', color: 'var(--red)',   bg: 'var(--red-light)',    desc: '14–29 days no visit' },
     { key: 'watch',    label: '🟡 Watch',    color: 'var(--amber)', bg: 'var(--amber-light)',  desc: '8–13 days no visit' },
@@ -503,7 +648,20 @@ function renderDorianList(dorian) {
             ${m.days_since_visit ? `<div style="font-family:var(--mono);font-size:13px;font-weight:500;color:${tier.color};white-space:nowrap">${m.days_since_visit}d ago</div>` : ''}
           </div>`).join('')}
       </div>`;
-  }).join('');
+  }).join('') +
+  (newMembers && newMembers.length ? `
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">🆕 New Founder Members This Week · Follow Up Within 48h · ${newMembers.length} member${newMembers.length>1?'s':''}</div>
+      ${newMembers.map(m => `
+        <div style="padding:12px 14px;background:var(--green-light);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:var(--radius);margin-bottom:6px">
+          <div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:3px">${m.name}</div>
+          <div style="font-size:12px;color:var(--ink-3)">${[m.membership, m.email, m.phone].filter(Boolean).join(' · ')}</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:3px;display:flex;gap:12px;flex-wrap:wrap">
+            <span>Joined ${m.member_since}</span>
+            <span>${m.visits_so_far === 0 ? '<span style="color:var(--red);font-weight:500">⚠ Has not visited yet</span>' : m.visits_so_far + ' visit' + (m.visits_so_far>1?'s':'') + ' so far'}</span>
+          </div>
+        </div>`).join('')}
+    </div>` : '');
 }
 
 // ─── Dorian CSV download ──────────────────────────────────────────
@@ -653,7 +811,7 @@ function aggregateData() {
   const firstRows    = get('05_first_visit');
   const noReturnRows = get('06_no_return');
   const retMgmtRows  = get('07_retention_management');
-  const classRows    = get('12_class_visit'); // Use summary class data, not raw attendance
+  // 12_class_visit is all-time data — we use 09_attendance_analysis for this week's class data instead
 
   // ── Revenue ──
   // Sales total = sum of Item Total from sales report
@@ -683,76 +841,159 @@ function aggregateData() {
   // First time visitors this week (ClassPass, drop-ins — informational only)
   const first_time_visitors = firstRows.length;
 
-  // ── Build retention lookup from retention management report ──
-  // Columns: ID, Last name, First name, Member Since, Check Ins YTD, etc.
-  const retLookup = {};
+  // ── Build Founder Member health map from retention_management ──
+  const founderMap = {};
   retMgmtRows.forEach(r => {
-    const first = (r['First name']||'').trim();
-    const last  = (r['Last name']||'').trim();
-    const fullName = (first + ' ' + last).trim().toLowerCase();
-    if (fullName.trim()) {
-      retLookup[fullName] = {
-        lifetime_visits: toNum(r['Check Ins YTD'] || r['Check Ins 365 Day'] || 0),
-        member_since:    r['Member Since'] || '',
-      };
-    }
-  });
-
-  // ── No-return members — fix names, enrich, cap at 20 ──
-  const no_return_members = noReturnRows.slice(0, 20).map(r => {
-    const rawName = r['Client'] || '';
-    const name    = fixName(rawName);
-    const enrich  = retLookup[name.toLowerCase()] || {};
-    return {
-      name,
-      email:           (r['Email'] || '').trim(),
-      phone:           (r['Phone'] || '').trim(),
-      membership:      (r['Pricing Option'] || r['Membership'] || '').trim(),
-      last_visit:      (r['Last Visit'] || '').trim(),
-      lifetime_visits: enrich.lifetime_visits || 0,
-      member_since:    enrich.member_since || '',
+    if (!(r['Membership Type']||'').includes('Founder')) return;
+    const name = ((r['First name']||'').trim() + ' ' + (r['Last name']||'').trim()).trim();
+    if (!name) return;
+    const c30  = parseInt(r['Check Ins 30 Day']||'0') || 0;
+    const cYTD = parseInt(r['Check Ins YTD']||'0') || 0;
+    const lv   = r['Last'] || '';
+    const freeze = (r['Freeze']||'') === 'Yes';
+    let daysAbsent = null;
+    try { const d = new Date(lv); if (!isNaN(d)) daysAbsent = Math.floor((new Date()-d)/86400000); } catch {}
+    let health = 'green';
+    if (freeze) health = 'frozen';
+    else if (c30 === 0 || daysAbsent >= 21) health = 'red';
+    else if (c30 <= 2) health = 'amber';
+    founderMap[name.toLowerCase()] = {
+      name, email: (r['Email']||'').trim(), phone: (r['Home phone']||'').trim(),
+      membership: 'Founder Member',
+      member_since: r['Member Since']||'', checkins_30: c30, checkins_ytd: cYTD,
+      last_visit: lv, days_absent: daysAbsent, health, freeze,
     };
   });
 
-  // ── Cancelled members — fix names ──
-  const cancelled_members = cancelRows.map(r => ({
-    name:        fixName(r['Client'] || r['Name'] || ''),
-    email:       (r['Email'] || '').trim(),
-    phone:       (r['Phone'] || r['Mobile phone'] || '').trim(),
-    membership:  (r['Membership Type'] || r['Pricing Option'] || '').trim(),
-    cancel_date: (r['Cancel Date'] || r['Date'] || '').trim(),
-  }));
+  // ── Founder Member health summary ──
+  const allF = Object.values(founderMap);
+  const health_summary = {
+    green:  allF.filter(f => f.health==='green').length,
+    amber:  allF.filter(f => f.health==='amber').length,
+    red:    allF.filter(f => f.health==='red').length,
+    frozen: allF.filter(f => f.freeze).length,
+  };
 
-  // ── Class data from 12_class_visit.csv ──
-  // Columns: Visit Type, Paid Visits, Total Visits (with commas)
-  const classMap = {};
-  classRows.forEach(r => {
-    const name   = (r['Visit Type'] || 'Unknown').trim();
-    const visits = toNum(r['Total Visits'] || r['Paid Visits'] || 0);
-    if (!classMap[name]) classMap[name] = { name, visits: 0, capacity: 0 };
-    classMap[name].visits += visits;
+  // ── No-return Founder Members — enriched ──
+  const no_return_members = noReturnRows
+    .filter(r => (r['Pricing Option']||'').includes('Founder'))
+    .slice(0, 20)
+    .map(r => {
+      const name   = fixName(r['Client']||'');
+      const enrich = founderMap[name.toLowerCase()] || {};
+      return {
+        name, email: enrich.email||(r['Email']||'').trim(),
+        phone: enrich.phone||(r['Phone']||'').trim(),
+        membership: (r['Pricing Option']||'').trim(),
+        last_visit: (r['Last Visit']||'').trim(),
+        days_absent: enrich.days_absent||0,
+        lifetime_visits: enrich.checkins_ytd||0,
+        checkins_30: enrich.checkins_30||0,
+        member_since: enrich.member_since||'',
+        health: enrich.health||'red',
+      };
+    });
+
+  // ── New Founder Members this week — need first visit follow-up ──
+  const new_founder_members = retMgmtRows
+    .filter(r => (r['Membership Type']||'').includes('Founder'))
+    .filter(r => { try { return new Date(r['Member Since']) >= weekStart; } catch { return false; } })
+    .map(r => ({
+      name: ((r['First name']||'').trim()+' '+(r['Last name']||'').trim()).trim(),
+      email: (r['Email']||'').trim(), phone: (r['Home phone']||'').trim(),
+      membership: 'Founder Member',
+      member_since: r['Member Since']||'',
+      visits_so_far: parseInt(r['Check Ins YTD']||'0')||0,
+    }));
+
+  // ── Cancelled members with full visit history ──
+  const cancelled_members = cancelRows
+    .filter(r => r['Name'] && r['Name'] !== 'Total: 5')
+    .map(r => {
+      const name   = (r['Name']||'').trim();
+      const enrich = founderMap[name.toLowerCase()] || {};
+      const cYTD   = enrich.checkins_ytd||0;
+      return {
+        name, email: (r['Email Address ']||r['Email']||'').trim(),
+        phone: (r['Phone Number']||r['Phone']||'').trim(),
+        cancel_date: (r['Cancellation Date']||'').replace('Terminated from ','').trim(),
+        lifetime_visits: cYTD, member_since: enrich.member_since||'',
+        churn_signal: cYTD<=3?'never_formed_habit':cYTD<=10?'early_churn':'long_term_churn',
+      };
+    });
+
+  // ── Class data from 09_attendance_analysis.csv ──
+  // Track Founder Member visits separately using Client ID
+  const founderIds = new Set(
+    retMgmtRows
+      .filter(r => (r['Membership Type']||'').includes('Founder'))
+      .map(r => (r['ID']||'').trim())
+      .filter(Boolean)
+  );
+
+  const attendRows = get('09_attendance_analysis');
+  const classMap   = {};
+  let late_cancel_count   = 0;
+  let founder_visits_total = 0;
+
+  attendRows.forEach(r => {
+    const name     = (r['Description']||'Unknown').trim();
+    const status   = (r['Status']||'').toLowerCase();
+    const clientId = (r['Client ID']||'').trim();
+    const isFounder = founderIds.has(clientId);
+
+    if (!classMap[name]) classMap[name] = { name, visits:0, founder_visits:0, late_cancels:0 };
+
+    if (status.includes('signed')) {
+      classMap[name].visits += 1;
+      if (isFounder) { classMap[name].founder_visits += 1; founder_visits_total += 1; }
+    } else if (status.includes('late cancel')) {
+      classMap[name].late_cancels += 1;
+      late_cancel_count++;
+    }
   });
-  const class_data = Object.values(classMap).filter(c => c.visits > 0);
 
-  // ── No-show count from attendance_no_revenue ──
-  const noRevRows    = get('10_attendance_no_revenue');
+  const class_data = Object.values(classMap)
+    .filter(c => c.visits > 0)
+    .map(c => ({
+      ...c,
+      founder_pct: c.visits > 0 ? Math.round(c.founder_visits / c.visits * 100) : 0
+    }))
+    .sort((a,b) => b.visits - a.visits);
+
+  // Average visits per Founder Member this week
+  const avg_founder_visits = founderIds.size > 0
+    ? Math.round(founder_visits_total / founderIds.size * 10) / 10
+    : 0;
+
+  // Classes sorted by Founder engagement
+  const founder_classes = [...class_data]
+    .filter(c => c.founder_visits > 0)
+    .sort((a,b) => b.founder_pct - a.founder_pct);
+
+  // ── No-show & late cancel count ──
+  const noRevRows     = get('10_attendance_no_revenue');
   const no_show_count = noRevRows.filter(r =>
-    (r['Status'] || '').toLowerCase().includes('no show') ||
-    (r['Status'] || '').toLowerCase() === 'late cancel'
-  ).length;
+    (r['Status']||'').toLowerCase().includes('no show') ||
+    (r['Status']||'').toLowerCase().includes('late cancel')
+  ).length || late_cancel_count;
 
   return {
     week_of: weekOf,
-    sales_total:       Math.round(sales_total),
-    autopay_total:     Math.round(autopay_total),
+    sales_total:          Math.round(sales_total),
+    autopay_total:        Math.round(autopay_total),
     active_count,
     cancelled_count,
     first_visit_count,
     first_time_visitors,
     no_show_count,
     no_return_members,
+    new_founder_members,
     cancelled_members,
     class_data,
+    health_summary,
+    avg_founder_visits,
+    founder_classes,
   };
 }
 
