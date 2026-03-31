@@ -166,7 +166,7 @@ bright_spot: One specific Founder Member metric or pattern to amplify. Be concre
 
 New Founder Members (new_founder_members) who have 0 visits should be flagged — they paid but haven't shown up yet, highest early churn risk.
 Cancelled members with churn_signal=never_formed_habit means they left before forming a habit — this is an onboarding problem.
-Health summary: green=${health_summary.green}, amber=${health_summary.amber}, red=${health_summary.red} — use these numbers in your analysis.
+Health summary: green=${data.health_summary?.green ?? 0}, amber=${data.health_summary?.amber ?? 0}, red=${data.health_summary?.red ?? 0} — use these numbers in your analysis.
 
 RETURN ONLY THIS JSON, NOTHING ELSE:
 {"revenue":{"total_weekly":0,"mrr":0,"mrr_pct":0,"pack_and_class":0,"revenue_per_member":0},"membership":{"active_count":0,"new_this_week":0,"churned_this_week":0,"net_growth":0,"churn_rate_pct":0,"retention_rate_pct":0,"progress_to_800_pct":0},"attendance":{"avg_fill_rate_pct":0,"total_visits":0,"no_show_rate_pct":0,"top_classes":[{"name":"","visits":0,"fill_rate_pct":0}],"bottom_classes":[{"name":"","visits":0,"fill_rate_pct":0}]},"dorian":{"critical":[{"name":"","email":"","phone":"","membership":"","last_visit":"","days_since_visit":0,"lifetime_visits":0,"member_since":""}],"watch":[],"lost":[],"win_back":[{"name":"","email":"","phone":"","membership":"","cancel_date":""}]},"intelligence":{"headline":"","actions":["","",""],"risk":"","bright_spot":""},"warnings":[]}`;
