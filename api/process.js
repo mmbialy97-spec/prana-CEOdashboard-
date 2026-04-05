@@ -51,11 +51,13 @@ export default async function handler(req, res) {
     result.week_of     = data.week_of;
     result.uploaded_at = new Date().toISOString();
 
-    // 2. Save to Apps Script via POST (no URL length limit)
+    // 2. Save to Apps Script via POST body encoded as JSON in a GET param
+    // We save a compact version to keep the URL small
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyyqmSW4DM178V3C9W1H4Isnhh_t8bhwo1V1yLVjpAzvdSeoXaHIhkpcqfHjQjbfe-K/exec';
 
-    // 2a. Save Claude's analysis (full, including trimmed dorian)
-    const claudeSave = {
+    // Strip large arrays from what we save to keep URL short
+    // Apps Script only needs the processed metrics + small dorian list
+    const toSave = {
       ...result,
       dorian: {
         critical: (result.dorian?.critical || []).slice(0, 10),
@@ -65,39 +67,21 @@ export default async function handler(req, res) {
       }
     };
 
-    // 2b. Save raw computed data (for class section persistence)
-    // Strip PII-heavy arrays, keep only what the dashboard needs for class/frequency rendering
-    const rawSave = {
-      week_of:                    data.week_of,
-      health_summary:             data.health_summary             || {},
-      avg_founder_visits:         data.avg_founder_visits         || 0,
-      founder_frequency_histogram:data.founder_frequency_histogram|| {},
-      founder_days:               data.founder_days               || [],
-      founder_times:              data.founder_times              || [],
-      top_instructors:           (data.top_instructors            || []).slice(0, 8),
-      class_data:                (data.class_data                 || []).slice(0, 20),
-      founder_classes:           (data.founder_classes            || []).slice(0, 20),
-      same_day_booking_pct:       data.same_day_booking_pct       || 0,
-      active_count:               data.active_count               || 0,
-      first_visit_count:          data.first_visit_count          || 0,
-    };
+    const saveEncoded = encodeURIComponent(JSON.stringify(toSave));
 
-    try {
-      await fetch(APPS_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action:   'save_week',
-          week_of:  data.week_of,
-          claude:   claudeSave,
-          raw:      rawSave,
-        })
-      });
-    } catch (e) {
-      result.save_warning = 'Save failed: ' + e.message;
+    // Only save if payload is small enough
+    if (saveEncoded.length < 8000) {
+      try {
+        await fetch(APPS_SCRIPT_URL + '?action=save&week_of=' +
+          encodeURIComponent(data.week_of) + '&data=' + saveEncoded);
+      } catch (e) {
+        result.save_warning = 'Save failed: ' + e.message;
+      }
+    } else {
+      result.save_warning = 'Data too large to save (' + saveEncoded.length + ' chars)';
     }
 
-    // 3. Get previous week for WoW deltas
+    // 3. Get previous week
     let previous = null;
     try {
       const prevRes  = await fetch(APPS_SCRIPT_URL + '?action=get_previous&week_of=' + encodeURIComponent(data.week_of));
@@ -105,8 +89,7 @@ export default async function handler(req, res) {
       if (prevData.ok) previous = prevData.data;
     } catch { /* optional */ }
 
-    // 4. Attach raw data so dashboard can render class section immediately
-    return res.status(200).json({ ok: true, current: result, previous, raw: rawSave });
+    return res.status(200).json({ ok: true, current: result, previous });
 
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -145,14 +128,6 @@ IMPORTANT DATA NOTES:
 - founder_classes = classes sorted by Founder Member engagement (founder_pct = % of class that are Founders)
 - Reformer Pilates is excluded from Founder Membership analysis — it is a paid add-on
 
-- founder_frequency_histogram = how many Founders visited 0, 1, 2, 3-4, 5+ times this month — use this to quantify the "dead weight" problem
-- founder_days = [{day, count}] sorted by founder visits — which days of week Founders prefer
-- founder_times = [{time, count}] sorted by popularity — which time slots Founders prefer
-- top_instructors = [{name, visits, founder_visits, founder_pct}] — which instructors draw the most Founders; use this if a specific instructor is driving retention
-- paid_services = non-membership paid services this week (Reformer, packs etc) — only mention as acquisition data
-- same_day_booking_pct = % of bookings made same day as class — high % means impulsive/uncommitted behavior, low % means planners
-- retention_segments = from 08_retention report if available
-
 CALCULATION RULES:
 - mrr = autopay_total
 - pack_and_class = sales_total
@@ -175,24 +150,28 @@ CALCULATION RULES:
 WEEKLY DATA:
 ${JSON.stringify(data)}
 
-INTELLIGENCE — BE HYPER-SPECIFIC AND TACTICAL. Only reference Founder Members.
+INTELLIGENCE — CEO LEVEL. Qualitative AND quantitative. Only reference Founder Members.
 
-headline: One punchy sentence capturing the single most important business reality this week for Founder Members.
+headline: One punchy sentence with a key number. The most important business reality this week.
+Example: "Net growth of +3 Founder Members brings you to 85 — at this pace you hit 100 in 5 weeks."
 
-actions: 3 specific, immediately actionable items. Each must:
-- Name a specific Founder Member by name with their phone number
-- State exactly why they need contact (days absent, lifetime visits, churn signal)
-- Tell Dorian exactly what to say or offer
-Example: "Call Sarah Johnson (512-555-0101) — Founder Member, 47 lifetime visits, 18 days absent since 3/13 — she is your most valuable at-risk member, offer a complimentary class to bring her back"
+insight: 2-3 sentences mixing qualitative observation with quantitative data. Think like a business advisor, not a data analyst. Cover what the numbers mean for the business trajectory.
+Example: "MRR stability is strong at $16,565 but 6 cancellations this week (7.1% churn) is above the healthy 3% threshold — if this rate persists you lose 72 members annually. The bright side: 9 new Founder Members joined this week, your best acquisition week yet, suggesting your referral and marketing efforts are working."
 
-risk: The single most urgent threat to Founder Member MRR with specific numbers. Reference churn_signal patterns from cancelled_members if relevant.
+actions: Exactly 3 actions. Mix of STRATEGIC decisions (CEO makes) and DELEGATION alerts (CEO assigns to team).
+- Strategic example: "Add a second Heated Mat Pilates slot on Thursday 7pm — it has 32% Founder Member attendance, your highest engagement class, and likely has waitlist demand"
+- Delegation example: "Dorian: 9 Founder Members are urgent (21+ days absent) — ${health_summary.red} need calls today, prioritise those with 10+ lifetime visits who are drifting"
+- Do NOT name individual members in actions — that belongs in Dorian's list
+- Mix 1-2 strategic + 1-2 delegation alerts per response
 
-bright_spot: One specific Founder Member metric or pattern to amplify. Be concrete.
+risk: The single most urgent CEO-level threat with specific numbers and business impact.
 
-New Founder Members (new_founder_members) who have 0 visits should be flagged — they paid but haven't shown up yet, highest early churn risk.
-Cancelled members with churn_signal=never_formed_habit means they left before forming a habit — this is an onboarding problem.
-Health summary: green=${data.health_summary?.green ?? 0}, amber=${data.health_summary?.amber ?? 0}, red=${data.health_summary?.red ?? 0} — use these numbers in your analysis.
+bright_spot: One specific metric or pattern that is working and should be amplified. Be concrete with numbers.
+
+New Founder Members with 0 visits = onboarding failure risk. Flag in insight if >2 members.
+Cancelled members with churn_signal=never_formed_habit = systematic onboarding problem, not satisfaction. Flag strategically.
+Use avg_founder_visits in insight — below 2/week is a retention warning signal.
 
 RETURN ONLY THIS JSON, NOTHING ELSE:
-{"revenue":{"total_weekly":0,"mrr":0,"mrr_pct":0,"pack_and_class":0,"revenue_per_member":0},"membership":{"active_count":0,"new_this_week":0,"churned_this_week":0,"net_growth":0,"churn_rate_pct":0,"retention_rate_pct":0,"progress_to_800_pct":0},"attendance":{"avg_fill_rate_pct":0,"total_visits":0,"no_show_rate_pct":0,"top_classes":[{"name":"","visits":0,"fill_rate_pct":0}],"bottom_classes":[{"name":"","visits":0,"fill_rate_pct":0}]},"dorian":{"critical":[{"name":"","email":"","phone":"","membership":"","last_visit":"","days_since_visit":0,"lifetime_visits":0,"member_since":""}],"watch":[],"lost":[],"win_back":[{"name":"","email":"","phone":"","membership":"","cancel_date":""}]},"intelligence":{"headline":"","actions":["","",""],"risk":"","bright_spot":""},"warnings":[]}`;
+{"revenue":{"total_weekly":0,"mrr":0,"mrr_pct":0,"pack_and_class":0,"revenue_per_member":0},"membership":{"active_count":0,"new_this_week":0,"churned_this_week":0,"net_growth":0,"churn_rate_pct":0,"retention_rate_pct":0,"progress_to_800_pct":0},"attendance":{"avg_fill_rate_pct":0,"total_visits":0,"no_show_rate_pct":0,"top_classes":[{"name":"","visits":0,"fill_rate_pct":0}],"bottom_classes":[{"name":"","visits":0,"fill_rate_pct":0}]},"dorian":{"critical":[{"name":"","email":"","phone":"","membership":"","last_visit":"","days_since_visit":0,"lifetime_visits":0,"member_since":""}],"watch":[],"lost":[],"win_back":[{"name":"","email":"","phone":"","membership":"","cancel_date":""}]},"intelligence":{"headline":"","insight":"","actions":["","",""],"risk":"","bright_spot":""},"warnings":[]}`;
 }
