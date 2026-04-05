@@ -634,7 +634,7 @@ async function sendChat() {
     if (result.error) {
       wrap.innerHTML = '<div class="chat-error">Error: ' + result.error + '</div>';
     } else {
-      wrap.innerHTML = '<div class="chat-answer"><div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--green);text-transform:uppercase;margin-bottom:6px">Answer</div>' + result.answer + '<div style="font-size:11px;color:var(--ink-3);margin-top:8px;cursor:pointer" onclick="this.parentElement.parentElement.innerHTML=''">&#x2715; Dismiss</div></div>';
+      wrap.innerHTML = '<div class="chat-answer"><div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--green);text-transform:uppercase;margin-bottom:6px">Answer</div>' + result.answer + '<div style="font-size:11px;color:var(--ink-3);margin-top:8px;cursor:pointer" onclick="this.parentElement.parentElement.innerHTML=&quot;&quot;">&#x2715; Dismiss</div></div>';
     }
   } catch(e) {
     wrap.innerHTML = '<div class="chat-error">Could not reach API: ' + e.message + '</div>';
