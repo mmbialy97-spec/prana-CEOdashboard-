@@ -97,17 +97,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .dash-actions{margin-left:auto;display:flex;gap:10px;align-items:center}
 .week-select{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--ink-2);background:var(--surface);font-family:var(--body);cursor:pointer}
 
-/* ── Chat ── */
-.chat-bar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:10px 16px;z-index:100;box-shadow:0 -4px 20px rgba(0,0,0,0.06)}
-.chat-inner{max-width:1100px;margin:0 auto;display:flex;gap:8px;align-items:flex-end}
-.chat-input{flex:1;padding:9px 14px;border:1px solid var(--border);border-radius:var(--radius);font-size:15px;font-family:var(--body);resize:none;outline:none;background:var(--bg);min-height:40px;max-height:100px;-webkit-appearance:none}
-.chat-input:focus{border-color:var(--green)}
-.chat-send{padding:9px 16px;background:var(--green);color:#fff;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--body);white-space:nowrap;flex-shrink:0;touch-action:manipulation}
-.chat-send:disabled{opacity:0.5;cursor:default}
-.chat-chip{padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:20px;font-size:12px;color:var(--ink-2);cursor:pointer;font-family:var(--body);white-space:nowrap;transition:all 0.15s;touch-action:manipulation}
-.chat-chip:hover{border-color:var(--green);color:var(--green);background:var(--green-light)}
-.chat-answer{max-width:1100px;margin:0 auto 8px;padding:12px 16px;background:var(--green-light);border:1px solid var(--green);border-radius:var(--radius);font-size:14px;color:var(--ink);line-height:1.6}
-.chat-error{max-width:1100px;margin:0 auto 8px;padding:12px 16px;background:var(--red-light);border:1px solid var(--red);border-radius:var(--radius);font-size:13px;color:var(--red)}
+/* Chat removed */
 
 /* ── Responsive grid helpers ── */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -426,9 +416,9 @@ function renderDashboard() {
     <!-- 6 Pulse metrics -->
     <div class="g3" style="margin-bottom:20px">
       ${pulse('MRR', fmtC(r.mrr), 'Monthly recurring revenue', 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
-      ${pulse('Founder Members', m.active_count||'—', '${800-(m.active_count||0)} to full capacity', 'var(--ink)', wow(m.active_count, p?.membership?.active_count, false))}
-      ${pulse('Net Growth', (m.net_growth>0?'+':'')+m.net_growth, '${m.new_this_week||0} joined · ${m.churned_this_week||0} churned', (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
-      ${pulse('Member Health', hs.green||0, '<span style="color:var(--amber)">●${hs.amber||0} at risk</span> &nbsp;<span style="color:var(--red)">●${hs.red||0} urgent</span>', 'var(--green)')}
+      ${pulse('Founder Members', m.active_count||'—', (800-(m.active_count||0))+' to full capacity', 'var(--ink)', wow(m.active_count, p?.membership?.active_count, false))}
+      ${pulse('Net Growth', (m.net_growth>0?'+':'')+m.net_growth, (m.new_this_week||0)+' joined · '+(m.churned_this_week||0)+' churned', (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
+      ${pulse('Member Health', hs.green||0, '<span style="color:var(--amber)">●'+(hs.amber||0)+' at risk</span> &nbsp;<span style="color:var(--red)">●'+(hs.red||0)+' urgent</span>', 'var(--green)')}
       ${pulse('Avg Visits / Member', (c.avg_founder_visits||0)+'/wk', 'Target: 3+ per week', (c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)')}
       ${pulse('Forecasted ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
     </div>
@@ -505,8 +495,8 @@ function renderDashboard() {
     <div class="g2" style="margin-bottom:16px">
       ${pulse('MRR', fmtC(r.mrr), 'Monthly Founder Member autopay', 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
       ${pulse('Forecasted ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
-      ${pulse('Revenue / Member', fmtC(r.revenue_per_member), 'MRR ÷ ${m.active_count||0} members / month', 'var(--ink)')}
-      ${pulse('Weekly Sales', fmtC(r.total_weekly), 'Packs, singles & non-autopay', 'var(--ink)')}
+      ${pulse('Revenue / Member', fmtC(r.revenue_per_member), 'MRR ÷ '+(m.active_count||0)+' members / month', 'var(--ink)')}
+      ${pulse('Weekly Sales', fmtC(r.total_weekly), 'Non-autopay revenue this week', 'var(--ink)')}
     </div>
 
     <div class="g2">
@@ -536,40 +526,84 @@ function renderDashboard() {
     </div>`;
 
   // ─── TAB: CLASSES ────────────────────────────────────────────────
+  const instrData  = c.instructor_data || [];
+  const peakTimes  = c.peak_times      || [];
+  const peakDays   = c.peak_days       || [];
+  const allClasses = c.class_data      || [];
+  const maxVisits  = allClasses.length ? allClasses[0].visits : 1;
+
   const tabClasses = `
     <div class="g4" style="margin-bottom:16px">
       ${pulse('Total Check-ins', (a.total_visits||0).toLocaleString(), 'All visitors this week', 'var(--ink)')}
-      ${pulse('Founder Visits', founderVisits, (c.avg_founder_visits||0)+' avg per member/week', 'var(--green)')}
+      ${pulse('Founder Visits', founderVisits, (c.avg_founder_visits||0)+' avg / member', (c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)')}
       ${pulse('Late Cancels', fmtPct(a.no_show_rate_pct||0), 'Of all bookings', (a.no_show_rate_pct||0)>10?'var(--amber)':'var(--ink)')}
-      ${pulse('First-Time Visitors', c.first_time_visitors||0, 'Acquisition pipeline this week', 'var(--green)')}
+      ${pulse('First-Time Visitors', c.first_time_visitors||0, 'Acquisition pipeline', 'var(--green)')}
+    </div>
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:12px;box-shadow:var(--shadow)">
+      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">All Classes This Week</div>
+      ${allClasses.slice(0,8).map((cl,i) => {
+        const barW = Math.round(cl.visits/maxVisits*100);
+        const isFounderClass = !cl.name.toLowerCase().includes('reformer');
+        return '<div style="margin-bottom:14px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">' +
+            '<div style="font-size:13px;font-weight:500;color:var(--ink)">' + cl.name +
+              (cl.top_instructor ? '<span style="font-size:11px;color:var(--ink-3);font-weight:400"> · ' + cl.top_instructor + '</span>' : '') +
+            '</div>' +
+            '<div style="font-size:12px;color:var(--ink-3);white-space:nowrap;margin-left:8px">' + cl.visits + ' visits' +
+              (cl.founder_visits > 0 && isFounderClass ? ' · <span style=\"color:var(--green)\">' + cl.founder_pct + '% Founders</span>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">' +
+            '<div style="height:100%;width:' + barW + '%;background:' + (isFounderClass && cl.founder_pct > 20 ? 'var(--green)' : 'var(--ink-3)') + ';border-radius:3px"></div>' +
+          '</div>' +
+          '<div style="font-size:10px;color:var(--ink-3);margin-top:3px">' + (cl.top_day||'') + (cl.top_time ? ' · ' + cl.top_time : '') + (cl.late_cancels > 0 ? ' · ' + cl.late_cancels + ' late cancels' : '') + '</div>' +
+        '</div>';
+      }).join('')}
     </div>
 
     <div class="g2">
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--green);text-transform:uppercase;margin-bottom:4px">Founder Member Classes</div>
-        <div style="font-size:11px;color:var(--ink-3);margin-bottom:16px">Ranked by Founder engagement %</div>
-        ${(c.founder_classes||[]).filter(cl=>!cl.name.toLowerCase().includes('reformer')).slice(0,6).map((cl,i)=>`
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-            <div style="width:22px;height:22px;border-radius:50%;background:var(--green-light);color:var(--green);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
-            <div style="flex:1">
-              <div style="font-size:13px;font-weight:500;color:var(--ink)">${cl.name}</div>
-              <div style="font-size:11px;color:var(--ink-3)">${cl.founder_visits} Founder visits · ${cl.founder_pct}% of class</div>
-            </div>
-            <div style="font-family:var(--mono);font-size:12px;color:var(--green);font-weight:600">${cl.founder_pct}%</div>
-          </div>`).join('')}
-        ${!(c.founder_classes||[]).length?'<div style="font-size:13px;color:var(--ink-3)">No data</div>':''}
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Instructor Performance</div>
+        <div style="font-size:11px;color:var(--ink-3);margin-bottom:14px">By total check-ins this week</div>
+        ${instrData.slice(0,8).map((ins,i) =>
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+            '<div style="width:20px;height:20px;border-radius:50%;background:' + (i<3?'var(--green-light)':'var(--surface-2)') + ';color:' + (i<3?'var(--green)':'var(--ink-3)') + ';font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">' + (i+1) + '</div>' +
+            '<div style="flex:1;min-width:0">' +
+              '<div style="font-size:13px;font-weight:' + (i<3?'600':'400') + ';color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + ins.name + '</div>' +
+              '<div style="font-size:11px;color:var(--ink-3)">' + ins.visits + ' check-ins · ' + ins.classes_taught + ' classes · ' + ins.avg_per_class + ' avg/class</div>' +
+            '</div>' +
+          '</div>'
+        ).join('')}
+        ${!instrData.length ? '<div style="font-size:13px;color:var(--ink-3)">Upload CSVs to see data</div>' : ''}
       </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">All Classes by Total Visits</div>
-        <div style="font-size:11px;color:var(--ink-3);margin-bottom:16px">Includes ClassPass & drop-ins</div>
-        ${(a.top_classes||[]).slice(0,6).map((cl,i)=>`
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-            <div style="width:22px;height:22px;border-radius:50%;background:var(--surface-2);color:var(--ink-2);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
-            <div style="flex:1">
-              <div style="font-size:13px;font-weight:500;color:var(--ink)">${cl.name}</div>
-              <div style="font-size:11px;color:var(--ink-3)">${cl.visits} total · ${cl.founder_visits||0} Founders</div>
-            </div>
-          </div>`).join('')}
+
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:12px">Peak Class Times</div>
+          ${peakTimes.slice(0,5).map((t,i) =>
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+              '<span style="font-size:13px;color:var(--ink);font-weight:' + (i===0?'600':'400') + '">' + t.time + '</span>' +
+              '<span style="font-family:var(--mono);font-size:12px;color:' + (i===0?'var(--green)':'var(--ink-3)') + '">' + t.visits + '</span>' +
+            '</div>'
+          ).join('')}
+          ${!peakTimes.length ? '<div style="font-size:13px;color:var(--ink-3)">No data</div>' : ''}
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow)">
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:12px">Busiest Days</div>
+          ${peakDays.slice(0,7).map((d,i) => {
+            const maxD = peakDays[0] ? peakDays[0].visits : 1;
+            const w = Math.round(d.visits/maxD*100);
+            return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">' +
+              '<div style="font-size:12px;color:var(--ink-2);width:30px;flex-shrink:0">' + d.day.slice(0,3) + '</div>' +
+              '<div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden">' +
+                '<div style="height:100%;width:' + w + '%;background:' + (i===0?'var(--green)':'var(--ink-3)') + ';border-radius:3px"></div>' +
+              '</div>' +
+              '<div style="font-family:var(--mono);font-size:11px;color:var(--ink-3);width:28px;text-align:right">' + d.visits + '</div>' +
+            '</div>';
+          }).join('')}
+          ${!peakDays.length ? '<div style="font-size:13px;color:var(--ink-3)">No data</div>' : ''}
+        </div>
       </div>
     </div>`;
 
@@ -601,89 +635,9 @@ function renderDashboard() {
 
   </div>
 
-  <!-- Chat bar -->
-  <div class="chat-bar" id="chatBar">
-    <div id="chatAnswerWrap"></div>
-    <div id="chatSuggestions" style="max-width:1100px;margin:0 auto 8px;display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px"></div>
-    <div class="chat-inner">
-      <textarea class="chat-input" id="chatInput" placeholder="Ask anything about your Founder Members…" rows="1"></textarea>
-      <button class="chat-send" id="chatSend">Ask Claude</button>
-    </div>
-  </div>
-  <div style="height:110px"></div>`;
+  <div style="height:24px"></div>`;
 }
 
-
-// ─── Chat ─────────────────────────────────────────────────────────
-async function sendChat() {
-  const input  = document.getElementById('chatInput');
-  const btn    = document.getElementById('chatSend');
-  const wrap   = document.getElementById('chatAnswerWrap');
-  const q      = (input ? input.value : '').trim();
-  if (!q) return;
-  btn.disabled = true;
-  btn.textContent = 'Thinking…';
-  wrap.innerHTML = '';
-  try {
-    const res    = await fetch('/api/chat', {
-      method:  'POST',
-      headers: {'Content-Type':'application/json'},
-      body:    JSON.stringify({ question: q, data: state.dashData && state.dashData.current })
-    });
-    const result = await res.json();
-    if (result.error) {
-      wrap.innerHTML = '<div class="chat-error">Error: ' + result.error + '</div>';
-    } else {
-      wrap.innerHTML = '<div class="chat-answer"><div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--green);text-transform:uppercase;margin-bottom:6px">Answer</div>' + result.answer + '<div style="font-size:11px;color:var(--ink-3);margin-top:8px;cursor:pointer" onclick="this.parentElement.parentElement.innerHTML=&quot;&quot;">&#x2715; Dismiss</div></div>';
-    }
-  } catch(e) {
-    wrap.innerHTML = '<div class="chat-error">Could not reach API: ' + e.message + '</div>';
-  }
-  if (input) input.value = '';
-  btn.disabled = false;
-  btn.textContent = 'Ask Claude';
-}
-
-// ─── Suggested questions ─────────────────────────────────────────
-const SUGGESTED_QUESTIONS = [
-  // Retention
-  "Who should Dorian call today?",
-  "Which Founder Members haven't visited this week?",
-  "Who joined but hasn't visited yet?",
-  "Which members are visiting less than once a week?",
-  // Revenue
-  "What's my projected ARR if I add 10 members this month?",
-  "At current growth, when do we hit 100 members?",
-  "What would ARR be if churn dropped to 3%?",
-  // Classes
-  "Which classes do Founder Members attend most?",
-  "Which class should we add a second slot for?",
-  "Which instructor fills the most classes?",
-  // Growth
-  "How many ClassPass users came this week who could convert?",
-  "Who are my top 5 most loyal Founder Members?",
-  "Which new members are highest risk of churning?",
-];
-
-// ─── Chat input binding ───────────────────────────────────────────
-function bindChatEvents() {
-  const input = document.getElementById('chatInput');
-  const btn   = document.getElementById('chatSend');
-  const wrap  = document.getElementById('chatSuggestions');
-
-  if (input) input.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
-  });
-  if (btn) btn.addEventListener('click', sendChat);
-
-  // Render suggestion chips — show 4 random ones
-  if (wrap && state.view === 'dashboard') {
-    const shuffled = [...SUGGESTED_QUESTIONS].sort(() => Math.random() - 0.5).slice(0, 5);
-    wrap.innerHTML = shuffled.map(q =>
-      `<button class="chat-chip" onclick="document.getElementById('chatInput').value='${q.replace(/'/g,"\'")}';sendChat()">${q}</button>`
-    ).join('');
-  }
-}
 
 // ─── Health summary renderer ─────────────────────────────────────
 function renderHealthSummary(c) {
@@ -809,7 +763,6 @@ function bindEvents() {
     dropZone.ondragover  = handleDragOver;
     dropZone.ondragleave = handleDragLeave;
     dropZone.ondrop      = handleDrop;
-  bindChatEvents();
 }
 }
 
@@ -1024,8 +977,7 @@ function aggregateData() {
       };
     });
 
-  // ── Class data from 09_attendance_analysis.csv ──
-  // Track Founder Member visits separately using Client ID
+  // ── Build Founder ID set ──
   const founderIds = new Set(
     retMgmtRows
       .filter(r => (r['Membership Type']||'').includes('Founder'))
@@ -1035,22 +987,60 @@ function aggregateData() {
 
   const attendRows = get('09_attendance_analysis');
   const classMap   = {};
-  let late_cancel_count   = 0;
+  const instrMap   = {};
+  const timeMap    = {};
+  const dayMap     = {};
+  const days       = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  let late_cancel_count    = 0;
   let founder_visits_total = 0;
 
   attendRows.forEach(r => {
-    const name     = (r['Description']||'Unknown').trim();
-    const status   = (r['Status']||'').toLowerCase();
-    const clientId = (r['Client ID']||'').trim();
-    const isFounder = founderIds.has(clientId);
+    const className  = (r['Description']||'Unknown').trim();
+    const status     = (r['Status']||'').toLowerCase();
+    const clientId   = (r['Client ID']||'').trim();
+    const isFounder  = founderIds.has(clientId);
+    const rawStaff   = (r['Staff']||'').trim();
+    const startTime  = (r['Start time']||'').trim();
+    const dateStr    = (r['Date']||'').trim();
 
-    if (!classMap[name]) classMap[name] = { name, visits:0, founder_visits:0, late_cancels:0 };
+    // Fix staff name "Last, First" → "First Last"
+    let instructor = rawStaff;
+    if (rawStaff.includes(',')) {
+      const parts = rawStaff.split(',');
+      instructor = (parts[1]||'').trim() + ' ' + (parts[0]||'').trim();
+    }
+
+    // Day of week
+    let dayName = '';
+    try {
+      const d = new Date(dateStr);
+      if (!isNaN(d)) dayName = days[d.getDay()];
+    } catch {}
+
+    // Class map
+    if (!classMap[className]) classMap[className] = {
+      name: className, visits:0, founder_visits:0, late_cancels:0,
+      instructors:{}, times:{}, days:{}
+    };
 
     if (status.includes('signed')) {
-      classMap[name].visits += 1;
-      if (isFounder) { classMap[name].founder_visits += 1; founder_visits_total += 1; }
+      classMap[className].visits += 1;
+      if (isFounder) { classMap[className].founder_visits += 1; founder_visits_total += 1; }
+      if (instructor) classMap[className].instructors[instructor] = (classMap[className].instructors[instructor]||0)+1;
+      if (startTime)  classMap[className].times[startTime]        = (classMap[className].times[startTime]||0)+1;
+      if (dayName)    classMap[className].days[dayName]            = (classMap[className].days[dayName]||0)+1;
+
+      // Global instructor map
+      if (!instrMap[instructor]) instrMap[instructor] = {name:instructor, visits:0, classes_taught:new Set()};
+      instrMap[instructor].visits += 1;
+      instrMap[instructor].classes_taught.add(className+dateStr+startTime);
+
+      // Global time and day maps
+      if (startTime) timeMap[startTime] = (timeMap[startTime]||0)+1;
+      if (dayName)   dayMap[dayName]    = (dayMap[dayName]||0)+1;
+
     } else if (status.includes('late cancel')) {
-      classMap[name].late_cancels += 1;
+      classMap[className].late_cancels += 1;
       late_cancel_count++;
     }
   });
@@ -1058,17 +1048,39 @@ function aggregateData() {
   const class_data = Object.values(classMap)
     .filter(c => c.visits > 0)
     .map(c => ({
-      ...c,
-      founder_pct: c.visits > 0 ? Math.round(c.founder_visits / c.visits * 100) : 0
+      name:           c.name,
+      visits:         c.visits,
+      founder_visits: c.founder_visits,
+      late_cancels:   c.late_cancels,
+      founder_pct:    c.visits > 0 ? Math.round(c.founder_visits/c.visits*100) : 0,
+      top_instructor: Object.entries(c.instructors).sort((a,b)=>b[1]-a[1])[0]?.[0] || '',
+      top_time:       Object.entries(c.times).sort((a,b)=>b[1]-a[1])[0]?.[0] || '',
+      top_day:        Object.entries(c.days).sort((a,b)=>b[1]-a[1])[0]?.[0] || '',
     }))
     .sort((a,b) => b.visits - a.visits);
 
-  // Average visits per Founder Member this week
-  const avg_founder_visits = founderIds.size > 0
-    ? Math.round(founder_visits_total / founderIds.size * 10) / 10
-    : 0;
+  // Instructor leaderboard
+  const instructor_data = Object.values(instrMap)
+    .map(i => ({
+      name:          i.name,
+      visits:        i.visits,
+      classes_taught: i.classes_taught.size,
+      avg_per_class: i.classes_taught.size > 0 ? Math.round(i.visits/i.classes_taught.size) : 0,
+    }))
+    .sort((a,b) => b.visits - a.visits)
+    .slice(0, 10);
 
-  // Classes sorted by Founder engagement
+  // Peak times and days
+  const peak_times = Object.entries(timeMap).sort((a,b)=>b[1]-a[1]).slice(0,5)
+    .map(([time,visits]) => ({time, visits}));
+  const peak_days  = Object.entries(dayMap).sort((a,b)=>b[1]-a[1])
+    .map(([day,visits]) => ({day, visits}));
+
+  // Average visits per Founder Member
+  const avg_founder_visits = founderIds.size > 0
+    ? Math.round(founder_visits_total/founderIds.size*10)/10 : 0;
+
+  // Founder classes sorted by engagement
   const founder_classes = [...class_data]
     .filter(c => c.founder_visits > 0)
     .sort((a,b) => b.founder_pct - a.founder_pct);
@@ -1096,6 +1108,9 @@ function aggregateData() {
     health_summary,
     avg_founder_visits,
     founder_classes,
+    instructor_data,
+    peak_times,
+    peak_days,
   };
 }
 
