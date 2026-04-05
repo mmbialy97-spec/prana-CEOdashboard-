@@ -31,7 +31,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .fu3{animation:fadeUp 0.4s 0.12s ease both}
 
 /* ── Layout ── */
-.page{max-width:660px;margin:0 auto;padding:48px 24px 80px}
+.page{max-width:660px;margin:0 auto;padding:32px 16px 80px}
 .header{display:flex;align-items:center;gap:14px;margin-bottom:40px}
 .logo{width:44px;height:44px;border-radius:10px;background:var(--green);color:#fff;font-family:var(--display);font-size:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .brand-name{font-family:var(--display);font-size:20px;color:var(--ink);line-height:1.2}
@@ -97,52 +97,59 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .dash-actions{margin-left:auto;display:flex;gap:10px;align-items:center}
 .week-select{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--ink-2);background:var(--surface);font-family:var(--body);cursor:pointer}
 
+/* ── Chat ── */
+.chat-bar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:10px 16px;z-index:100;box-shadow:0 -4px 20px rgba(0,0,0,0.06)}
+.chat-inner{max-width:1100px;margin:0 auto;display:flex;gap:8px;align-items:flex-end}
+.chat-input{flex:1;padding:9px 14px;border:1px solid var(--border);border-radius:var(--radius);font-size:15px;font-family:var(--body);resize:none;outline:none;background:var(--bg);min-height:40px;max-height:100px;-webkit-appearance:none}
+.chat-input:focus{border-color:var(--green)}
+.chat-send{padding:9px 16px;background:var(--green);color:#fff;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--body);white-space:nowrap;flex-shrink:0;touch-action:manipulation}
+.chat-send:disabled{opacity:0.5;cursor:default}
+.chat-chip{padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:20px;font-size:12px;color:var(--ink-2);cursor:pointer;font-family:var(--body);white-space:nowrap;transition:all 0.15s;touch-action:manipulation}
+.chat-chip:hover{border-color:var(--green);color:var(--green);background:var(--green-light)}
+.chat-answer{max-width:1100px;margin:0 auto 8px;padding:12px 16px;background:var(--green-light);border:1px solid var(--green);border-radius:var(--radius);font-size:14px;color:var(--ink);line-height:1.6}
+.chat-error{max-width:1100px;margin:0 auto 8px;padding:12px 16px;background:var(--red-light);border:1px solid var(--red);border-radius:var(--radius);font-size:13px;color:var(--red)}
+
+/* ── Responsive grid helpers ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+
 /* ── Mobile ── */
-@media (max-width:640px) {
-  /* Dashboard outer wrapper */
-  .dash-outer{padding:20px 16px 60px !important}
+@media(max-width:700px){
+  .g2,.g3,.g4{grid-template-columns:1fr 1fr}
+  .g4-to-1{grid-template-columns:1fr}
+}
+@media(max-width:480px){
+  .g2{grid-template-columns:1fr 1fr}
+  .g3,.g4{grid-template-columns:1fr 1fr}
+  .dash-header-actions{display:none}
+  .chat-chip{font-size:11px;padding:5px 10px}
+}
 
-  /* Header stacks logo+title on left, actions wrap below */
-  .dash-header-inner{flex-wrap:wrap !important;gap:10px !important;margin-bottom:24px !important;padding-bottom:16px !important}
-  .dash-header-actions{margin-left:0 !important;width:100% !important;justify-content:space-between !important}
+/* ── Dashboard header mobile ── */
+.dash-header-wrap{display:flex;align-items:center;gap:12px;margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.dash-header-left{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+.dash-header-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+@media(max-width:600px){
+  .dash-header-wrap{padding-bottom:14px;margin-bottom:18px}
+  .dash-header-actions .btn-secondary{display:none}
+}
 
-  /* Intelligence headline smaller */
-  .intel-headline{padding:22px 20px !important}
-  .intel-headline-text{font-size:20px !important;line-height:1.4 !important}
+/* ── Tab nav mobile ── */
+.tab-nav{display:flex;gap:2px;background:var(--surface-2);border-radius:10px;padding:4px;margin-bottom:24px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{flex:1;min-width:72px;padding:9px 8px;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-family:var(--body);transition:all 0.15s;white-space:nowrap;touch-action:manipulation}
 
-  /* Risk/Bright Spot: stack */
-  .risk-bright-grid{grid-template-columns:1fr !important}
+/* ── Dorian cards mobile ── */
+@media(max-width:600px){
+  .dorian-card{flex-direction:column;gap:6px}
+  .dorian-meta{flex-direction:column;gap:4px}
+}
 
-  /* Revenue: stack */
-  .revenue-grid{grid-template-columns:1fr !important}
-
-  /* Class summary: 1 col */
-  .class-summary-grid{grid-template-columns:1fr !important}
-
-  /* Class table+freq: stack */
-  .class-table-grid{grid-template-columns:1fr !important}
-
-  /* Class instructors+days: stack */
-  .class-ins-grid{grid-template-columns:1fr !important}
-
-  /* Monthly KPI: 2x2 */
-  .monthly-kpi-grid{grid-template-columns:1fr 1fr !important}
-
-  /* Monthly week table: hide less important columns */
-  .monthly-table-col-churn{display:none !important}
-  .monthly-table-col-visits{display:none !important}
-  .monthly-week-table{grid-template-columns:1.2fr 1fr 1fr 1fr !important}
-
-  /* Monthly class+freq: stack */
-  .monthly-class-grid{grid-template-columns:1fr !important}
-
-  /* Action card phone button: full width on mobile */
-  .action-phone-btn{width:100% !important;margin-top:8px !important;text-align:center !important}
-  .action-header{flex-wrap:wrap !important}
-
-  /* General: reduce section spacing */
-  .dash-section{margin-bottom:32px !important}
-  .dash-divider{margin:24px 0 !important}
+/* ── Intelligence card mobile ── */
+@media(max-width:600px){
+  .intel-headline{font-size:17px !important}
+  .action-grid{flex-direction:column}
 }
 </style>
 </head>
@@ -171,13 +178,13 @@ const GROUPS = ['Revenue','Membership','Attendance'];
 // ─── State ────────────────────────────────────────────────────────
 let state = {
   view: 'loading',      // loading | empty | upload | dashboard
+  tab: 'overview',      // overview | members | revenue | classes
   fileMap: {},
   processing: false,
   dragging: false,
   dashData: null,
   weeks: [],
   selectedWeek: null,
-  viewMode: 'weekly',   // weekly | monthly
   error: null,
 };
 
@@ -367,681 +374,318 @@ function downloadCSV(rows, filename) {
 
 // ─── Dashboard ────────────────────────────────────────────────────
 function renderDashboard() {
-  const d = state.dashData;
-  const c = d.current;
-  const p = d.previous;
+  const d     = state.dashData;
+  const c     = d.current;
+  const p     = d.previous;
+  const r     = c.revenue        || {};
+  const m     = c.membership     || {};
+  const a     = c.attendance     || {};
+  const dorian = c.dorian        || {};
+  const intel  = c.intelligence  || {};
+  const hs     = c.health_summary|| {};
+  const tab    = state.tab       || 'overview';
 
-  return `
-  <div style="max-width:1100px;margin:0 auto;padding:40px 32px 80px" class="fu dash-outer">
-
-    <!-- ─── HEADER ──────────────────────────────────────────────── -->
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:40px;padding-bottom:24px;border-bottom:1px solid var(--border)" class="dash-header-inner">
-      <div class="logo">P</div>
-      <div>
-        <div class="brand-name">Prana Wellness Club</div>
-        <div class="brand-sub">Week of ${c.week_of||''} · Founder Member Dashboard</div>
-      </div>
-      <div style="margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap" class="dash-header-actions">
-        <!-- View toggle -->
-        <div style="display:flex;background:var(--surface-2);border-radius:var(--radius);padding:3px;gap:2px">
-          <button onclick="setViewMode('weekly')" style="padding:6px 14px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--body);background:${state.viewMode==='weekly'?'var(--surface)':'transparent'};color:${state.viewMode==='weekly'?'var(--ink)':'var(--ink-3)'};box-shadow:${state.viewMode==='weekly'?'var(--shadow)':'none'};transition:all 0.15s">Weekly</button>
-          <button onclick="setViewMode('monthly')" style="padding:6px 14px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--body);background:${state.viewMode==='monthly'?'var(--surface)':'transparent'};color:${state.viewMode==='monthly'?'var(--ink)':'var(--ink-3)'};box-shadow:${state.viewMode==='monthly'?'var(--shadow)':'none'};transition:all 0.15s">Monthly</button>
-        </div>
-        ${state.weeks.length > 1 ? `
-          <select class="week-select" onchange="switchWeek(this.value)">
-            ${state.weeks.map(w => `<option value="${w.week_of}" ${w.week_of===state.selectedWeek?'selected':''}>${w.week_of}</option>`).join('')}
-          </select>` : ''}
-        <button class="btn-secondary" onclick="showUpload()">↑ Upload new week</button>
-      </div>
-    </div>
-
-    <!-- ─── BODY: weekly or monthly ────────────────────────────── -->
-    ${state.viewMode === 'monthly' ? renderMonthly(state.weeks, state.dashData) : renderWeeklyBody(d, c, p)}
-
-  </div>`;
-}
-
-// ─── Weekly body (extracted from renderDashboard) ─────────────────
-function renderWeeklyBody(d, c, p) {
-  const r      = c.revenue    || {};
-  const m      = c.membership || {};
-  const a      = c.attendance  || {};
-  const dorian = c.dorian  || {};
-  const intel  = c.intelligence || {};
-  const hs     = c.health_summary || {};
-
-  const atRiskCount = (dorian.critical||[]).length + (dorian.watch||[]).length + (dorian.lost||[]).length;
-  const newFounders  = c.new_founder_members || [];
+  const newFounders   = c.new_founder_members || [];
+  const atRiskCount   = (dorian.critical||[]).length + (dorian.watch||[]).length + (dorian.lost||[]).length;
+  const founderVisits = (c.founder_classes||[]).reduce((s,cl)=>s+(cl.founder_visits||0),0);
 
   const wow = (curr, prev, isC) => {
     if (!p || prev == null) return '';
     const diff = curr - prev;
     if (diff === 0) return '';
     const color = diff > 0 ? 'var(--green)' : 'var(--red)';
-    const label = isC ? fmtC(Math.abs(diff)) : Math.abs(diff);
     const sign  = diff > 0 ? '+' : '−';
-    return `<span style="font-size:11px;color:${color};margin-left:6px;font-weight:500">${sign}${label} vs last week</span>`;
+    const val   = isC ? fmtC(Math.abs(diff)) : Math.abs(diff);
+    return `<span style="font-size:11px;color:${color};font-weight:500;margin-left:6px">${sign}${val} vs last week</span>`;
   };
 
-  return `
-    <div style="margin-bottom:48px">
-
-      <!-- Headline -->
-      <div style="background:var(--ink);border-radius:var(--radius-lg);padding:32px;margin-bottom:12px;position:relative;overflow:hidden" class="intel-headline">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.14em;color:rgba(255,255,255,0.3);text-transform:uppercase;margin-bottom:16px">THIS WEEK · PRANA WELLNESS</div>
-        <div style="font-family:var(--display);font-size:26px;color:#fff;line-height:1.45;max-width:780px" class="intel-headline-text">${intel.headline||'—'}</div>
-      </div>
-
-      <!-- Actions -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px 26px;margin-bottom:12px;box-shadow:var(--shadow)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:18px">Top 3 Actions This Week</div>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          ${(intel.actions||[]).map((act, i) => {
-            const urgencyLabel = ['Call today','Contact this week','Reach out before Friday'][i] || '';
-            const urgencyColor = i === 0 ? 'var(--red)' : 'var(--amber)';
-            const urgencyBg   = i === 0 ? 'var(--red-light)' : 'var(--amber-light)';
-            const numBg       = i === 0 ? 'var(--red)' : i === 1 ? 'var(--amber)' : 'var(--ink-3)';
-
-            // Try to extract name + phone from the action string for visual anchor
-            // Pattern: "Call/Text [Name] ([phone])" or "Call [Name] ([phone])"
-            const nameMatch = act.match(/(?:Call|Text)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/);
-            const phoneMatch = act.match(/\((\d{3}[-.\s]?\d{3}[-.\s]?\d{4})\)/);
-            const name  = nameMatch  ? nameMatch[1]  : null;
-            const phone = phoneMatch ? phoneMatch[1] : null;
-
-            return `
-            <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
-              <!-- Action header -->
-              <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:${urgencyBg};border-bottom:1px solid var(--border)" class="action-header">
-                <div style="width:24px;height:24px;border-radius:50%;background:${numBg};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
-                <div style="font-size:10px;font-weight:700;letter-spacing:0.1em;color:${urgencyColor};text-transform:uppercase;flex:1">${urgencyLabel}</div>
-                ${phone ? `<a href="tel:${phone}" style="font-family:var(--mono);font-size:12px;font-weight:600;color:${urgencyColor};text-decoration:none;background:white;padding:4px 10px;border-radius:4px;border:1px solid ${urgencyColor}" class="action-phone-btn">${phone}</a>` : ''}
-              </div>
-              <!-- Action body -->
-              <div style="padding:14px 16px;font-size:13px;color:var(--ink);line-height:1.65">${act}</div>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>
-
-      <!-- Risk + Bright Spot — 60/40, risk dominates -->
-      <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px" class="risk-bright-grid">
-
-        <div style="background:var(--red-light);border:1px solid var(--red);border-radius:var(--radius-lg);padding:20px 24px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;color:var(--red);text-transform:uppercase">Risk This Week</div>
-          </div>
-          <div style="font-size:14px;color:var(--ink);line-height:1.7">${intel.risk||'—'}</div>
-        </div>
-
-        <div style="background:var(--green-light);border:1px solid var(--green);border-radius:var(--radius-lg);padding:20px 24px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;color:var(--green);text-transform:uppercase">Bright Spot</div>
-          </div>
-          <div style="font-size:13px;color:var(--ink);line-height:1.7">${intel.bright_spot||'—'}</div>
-        </div>
-
-      </div>
-    </div>
-
-    ${divider()}
-
-    <!-- ─── 2. KEY NUMBERS ───────────────────────────────────────── -->
-    <div style="margin-bottom:48px">
-      <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Founder Member Pulse</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px">
-
-        <!-- MRR -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">MRR</div>
-          <div style="font-family:var(--display);font-size:28px;color:var(--green);line-height:1">${fmtC(r.mrr)}</div>
-          <div style="font-size:11px;color:var(--ink-3);margin-top:6px">Monthly recurring · ${fmtC(r.mrr*12)} ARR</div>
-          ${wow(r.mrr, p?.revenue?.mrr, true)}
-        </div>
-
-        <!-- Active Members -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Founder Members</div>
-          <div style="font-family:var(--display);font-size:28px;color:var(--ink);line-height:1">${m.active_count||'—'}</div>
-          <div style="font-size:11px;color:var(--ink-3);margin-top:6px">${800-(m.active_count||0)} to full capacity</div>
-          ${wow(m.active_count, p?.membership?.active_count, false)}
-        </div>
-
-        <!-- Net Growth -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Net Growth</div>
-          <div style="font-family:var(--display);font-size:28px;color:${(m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)'};line-height:1">${(m.net_growth||0)>0?'+':''}${m.net_growth||0}</div>
-          <div style="font-size:11px;color:var(--ink-3);margin-top:6px">${m.new_this_week||0} joined · ${m.churned_this_week||0} churned</div>
-        </div>
-
-        <!-- Member Health -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Member Health</div>
-          ${(() => {
-            // Prefer health_summary; if missing derive urgent+watch from dorian tiers
-            let green = hs.green||0, amber = hs.amber||0, red = hs.red||0;
-            const derived = !green && !amber && !red;
-            if (derived) {
-              red   = (dorian.critical||[]).length + (dorian.lost||[]).length;
-              amber = (dorian.watch||[]).length;
-              green = Math.max(0, (m.active_count||0) - red - amber);
-            }
-            const total = green + amber + red;
-            if (!total) return `<div style="font-size:13px;color:var(--ink-3)">No health data this week</div>`;
-            const greenPct = Math.round(green/total*100);
-            const amberPct = Math.round(amber/total*100);
-            const redPct   = Math.round(red/total*100);
-            return `
-            ${derived ? `<div style="font-size:10px;color:var(--ink-3);margin-bottom:6px;font-style:italic">Estimated from Dorian tiers</div>` : ''}
-            <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px">
-              <span style="font-family:var(--display);font-size:28px;color:var(--green);line-height:1">${greenPct}%</span>
-              <span style="font-size:13px;color:var(--ink-3)">healthy (${green})</span>
-            </div>
-            <div style="display:flex;gap:10px;font-size:11px;flex-wrap:wrap">
-              <span style="color:var(--amber)">● ${amberPct}% at risk (${amber})</span>
-              <span style="color:var(--red)">● ${redPct}% urgent (${red})</span>
-            </div>`;
-          })()}
-        </div>
-
-        <!-- Avg visits per founder -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Avg Visits / Founder</div>
-          ${(() => {
-            const avg = c.avg_founder_visits||0;
-            if (!avg) return `
-              <div style="font-size:13px;color:var(--ink-3);line-height:1.5">No founder visit data this week</div>
-              <div style="font-size:11px;color:var(--ink-3);margin-top:6px">Target 3+ visits/week</div>`;
-            const color = avg>=3?'var(--green)':avg>=2?'var(--amber)':'var(--red)';
-            return `
-              <div style="font-family:var(--display);font-size:28px;color:${color};line-height:1">${avg}</div>
-              <div style="font-size:11px;color:var(--ink-3);margin-top:6px">This week · target 3+</div>`;
-          })()}
-        </div>
-
-      </div>
-
-      <!-- Progress bar to 800 -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;margin-top:12px;box-shadow:var(--shadow)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="font-size:12px;color:var(--ink-2);font-weight:500">Progress to 800 Founder Members</div>
-          <div style="font-family:var(--mono);font-size:12px;color:var(--green)">${m.active_count||0} / 800 · ${m.progress_to_800_pct||0}%</div>
-        </div>
-        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px">
-          <div style="height:100%;background:var(--green);border-radius:3px;width:${Math.min(m.progress_to_800_pct||0,100)}%;transition:width 0.6s ease"></div>
-        </div>
-        ${(() => {
-          const remaining = 800 - (m.active_count||0);
-          const net = m.net_growth||0;
-          if (net > 0) {
-            const weeksLeft = Math.ceil(remaining / net);
-            const monthsLeft = Math.round(weeksLeft / 4.3);
-            return `<div style="font-size:11px;color:var(--ink-3)">At +${net}/week net growth → <strong style="color:var(--ink-2)">${monthsLeft} months to full capacity</strong> · ${remaining} members to go</div>`;
-          } else if (net === 0) {
-            return `<div style="font-size:11px;color:var(--amber)">No net growth this week — trajectory stalled</div>`;
-          } else {
-            return `<div style="font-size:11px;color:var(--red)">Net loss of ${Math.abs(net)} this week — moving away from target</div>`;
-          }
-        })()}
-      </div>
-    </div>
-
-    ${divider()}
-
-    <!-- ─── 3. REVENUE ───────────────────────────────────────────── -->
-    <div style="margin-bottom:48px">
-      <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Revenue Breakdown</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px" class="revenue-grid">
-
-        <!-- MRR context card -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Founder Membership Revenue</div>
-          <div style="font-size:11px;color:var(--ink-3);margin-bottom:14px">Monthly recurring — not comparable to weekly sales below</div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-            <span style="font-size:13px;color:var(--ink-2)">MRR (this month)</span>
-            <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--green)">${fmtC(r.mrr)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-            <span style="font-size:13px;color:var(--ink-2)">Forecasted ARR</span>
-            <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--green)">${fmtC(r.mrr*12)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:10px;border-top:1px solid var(--border)">
-            <span style="font-size:13px;color:var(--ink-2)">Per Founder Member / month</span>
-            <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--ink)">${fmtC(r.revenue_per_member)}</span>
-          </div>
-        </div>
-
-        <!-- Weekly sales context -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Weekly Sales (Non-Membership)</div>
-          <div style="font-size:11px;color:var(--ink-3);margin-bottom:14px">This week only — packs, single classes, retail</div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-            <span style="font-size:13px;color:var(--ink-2)">Packs & single classes</span>
-            <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--ink)">${fmtC(r.pack_and_class||r.total_weekly)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;padding-top:10px;border-top:1px solid var(--border)">
-            <span style="font-size:13px;font-weight:600;color:var(--ink-2)">MRR mix</span>
-            <span style="font-family:var(--mono);font-size:20px;font-weight:700;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">${r.mrr_pct||0}%</span>
-          </div>
-          <div style="background:${(r.mrr_pct||0)>=70?'var(--green-light)':'var(--amber-light)'};border-radius:6px;padding:8px 12px;font-size:12px;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">
-            ${(r.mrr_pct||0)>=70?'✓ MRR target met — healthy revenue mix (>70%)':'↑ Pack buyers are conversion opportunities — each is a potential Founder Member at $149/month'}
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    ${divider()}
-
-    <!-- ─── 4. CLASS ENGAGEMENT ──────────────────────────────────── -->
-    <div style="margin-bottom:48px">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-        <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase">Class Engagement This Week</div>
-        <div style="font-size:12px;color:var(--ink-3)">Reformer excluded from Founder Membership</div>
-      </div>
-
-      ${(() => {
-        const allClasses    = (c.class_data || a.top_classes || []).filter(cl => cl.visits > 0).sort((a,b) => (b.founder_visits||0) - (a.founder_visits||0));
-        const founderClasses  = allClasses.filter(cl => !cl.name.toLowerCase().includes('reformer'));
-        const reformerClasses = allClasses.filter(cl =>  cl.name.toLowerCase().includes('reformer'));
-        const totalFounderVisits = founderClasses.reduce((s,cl) => s+(cl.founder_visits||0), 0);
-        const lateCancelPct  = a.no_show_rate_pct||0;
-        const freq           = c.founder_frequency_histogram || {};
-        const freqTotal      = Object.values(freq).reduce((s,v) => s+v, 0);
-        const topInstructors = c.top_instructors || [];
-        const founderDays    = c.founder_days    || [];
-        const founderTimes   = c.founder_times   || [];
-        const avgVisits      = c.avg_founder_visits || (m.active_count > 0 && totalFounderVisits > 0 ? Math.round(totalFounderVisits/m.active_count*10)/10 : 0);
-
-        // ── Row 1: 3 summary cards ──
-        const summaryRow = `
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px" class="class-summary-grid">
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">
-            <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Founder Visits This Week</div>
-            <div style="font-family:var(--display);font-size:28px;color:${totalFounderVisits>0?'var(--green)':'var(--ink-3)'}">${totalFounderVisits||'—'}</div>
-            <div style="font-size:11px;color:var(--ink-3);margin-top:4px">${avgVisits ? avgVisits+' avg per member · target 3+' : 'No founder data matched'}</div>
-          </div>
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">
-            <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Late Cancel Rate</div>
-            <div style="font-family:var(--display);font-size:28px;color:${lateCancelPct>10?'var(--amber)':'var(--ink)'}">${lateCancelPct}%</div>
-            <div style="font-size:11px;color:var(--ink-3);margin-top:4px">${lateCancelPct>10?'Above 10% — monitor closely':'Of all bookings this week'}</div>
-          </div>
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">
-            <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Classes with Founders</div>
-            <div style="font-family:var(--display);font-size:28px;color:var(--ink)">${founderClasses.filter(cl=>cl.founder_visits>0).length}</div>
-            <div style="font-size:11px;color:var(--ink-3);margin-top:4px">of ${founderClasses.length} membership classes this week</div>
-          </div>
-        </div>`;
-
-        // ── Row 2: Class table (left) + Frequency histogram (right) ──
-        const noDataMsg = `<div style="padding:24px 20px;font-size:13px;color:var(--ink-3);line-height:1.6">Founder visit breakdown unavailable — Client IDs could not be matched across reports.</div>`;
-
-        const classRows = founderClasses.length ? founderClasses.map((cl, i) => {
-          const fPct     = cl.founder_pct || (cl.visits>0 && cl.founder_visits>0 ? Math.round(cl.founder_visits/cl.visits*100) : 0);
-          const barColor = fPct>=50?'var(--green)':fPct>=25?'var(--amber)':'var(--border)';
-          return `
-          <div style="padding:11px 18px;display:flex;align-items:center;gap:12px;background:${i%2===1?'var(--bg)':'var(--surface)'};border-bottom:1px solid var(--border)">
-            <div style="flex:1;font-size:13px;font-weight:500;color:var(--ink)">${cl.name}</div>
-            <div style="width:70px;text-align:right;font-family:var(--mono);font-size:13px;color:${(cl.founder_visits||0)>0?'var(--green)':'var(--ink-3)'}">${cl.founder_visits||0}</div>
-            <div style="width:50px;text-align:right;font-family:var(--mono);font-size:12px;color:var(--ink-3)">${cl.visits}</div>
-            <div style="width:110px;display:flex;align-items:center;gap:6px;justify-content:flex-end">
-              <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden;max-width:56px">
-                <div style="height:100%;width:${fPct}%;background:${barColor};border-radius:3px"></div>
-              </div>
-              <div style="font-family:var(--mono);font-size:11px;color:${fPct>=50?'var(--green)':fPct>=25?'var(--amber)':'var(--ink-3)'};width:30px;text-align:right">${fPct}%</div>
-            </div>
-          </div>`;
-        }).join('') : noDataMsg;
-
-        const maxFreq = Math.max(...Object.values(freq), 1);
-        const freqColors = {'0 visits':'var(--red)','1 visit':'var(--amber)','2 visits':'var(--amber)','3–4 visits':'var(--green)','5+ visits':'var(--green)'};
-        const freqBars = Object.entries(freq).map(([label, count]) => {
-          const pct   = freqTotal > 0 ? Math.round(count/freqTotal*100) : 0;
-          const width = Math.round(count/maxFreq*100);
-          return `
-          <div style="margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-              <div style="font-size:12px;color:var(--ink-2)">${label}</div>
-              <div style="font-family:var(--mono);font-size:11px;color:var(--ink-3)">${count} members · ${pct}%</div>
-            </div>
-            <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
-              <div style="height:100%;width:${width}%;background:${freqColors[label]||'var(--ink-3)'};border-radius:3px"></div>
-            </div>
-          </div>`;
-        }).join('');
-
-        const tableAndFreq = `
-        <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:12px" class="class-table-grid">
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)">
-            <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
-              <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--green);text-transform:uppercase;flex:1">Founder Membership Classes</div>
-              <div style="font-size:10px;color:var(--ink-3);text-transform:uppercase;letter-spacing:0.08em;width:70px;text-align:right">F.Visits</div>
-              <div style="font-size:10px;color:var(--ink-3);text-transform:uppercase;letter-spacing:0.08em;width:50px;text-align:right">Total</div>
-              <div style="font-size:10px;color:var(--ink-3);text-transform:uppercase;letter-spacing:0.08em;width:110px;text-align:right">Founder %</div>
-            </div>
-            ${classRows}
-          </div>
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-            <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Visit Frequency This Month</div>
-            <div style="font-size:11px;color:var(--ink-3);margin-bottom:16px">How often Founders are coming in</div>
-            ${freqTotal > 0 ? freqBars : '<div style="font-size:13px;color:var(--ink-3)">No frequency data available</div>'}
-          </div>
-        </div>`;
-
-        // ── Row 3: Top instructors (left) + Best days/times (right) ──
-        const hasInstructors = topInstructors.length > 0;
-        const hasDays        = founderDays.length > 0;
-        const maxDayCount    = Math.max(...founderDays.map(d=>d.count), 1);
-
-        const instructorRows = hasInstructors ? topInstructors.slice(0,6).map((ins,i) => `
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 0;${i>0?'border-top:1px solid var(--border)':''}">
-            <div style="flex:1;font-size:13px;font-weight:500;color:var(--ink)">${ins.name}</div>
-            <div style="font-family:var(--mono);font-size:12px;color:var(--green);width:60px;text-align:right">${ins.founder_visits} F</div>
-            <div style="font-family:var(--mono);font-size:12px;color:var(--ink-3);width:50px;text-align:right">${ins.visits} tot</div>
-            <div style="font-family:var(--mono);font-size:11px;color:${ins.founder_pct>=50?'var(--green)':ins.founder_pct>=25?'var(--amber)':'var(--ink-3)'};width:36px;text-align:right">${ins.founder_pct}%</div>
-          </div>`).join('') : '<div style="font-size:13px;color:var(--ink-3)">Instructor data not available in this report</div>';
-
-        const dayBars = hasDays ? founderDays.map(({day, count}) => `
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-            <div style="font-size:12px;color:var(--ink-2);width:30px">${day}</div>
-            <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
-              <div style="height:100%;width:${Math.round(count/maxDayCount*100)}%;background:var(--green);border-radius:3px"></div>
-            </div>
-            <div style="font-family:var(--mono);font-size:11px;color:var(--ink-3);width:24px;text-align:right">${count}</div>
-          </div>`).join('') : '';
-
-        const timeBars = founderTimes.length ? `
-          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
-            <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:10px">Preferred Time Slots</div>
-            ${founderTimes.map(({time,count}) => `
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
-                <div style="font-size:11px;color:var(--ink-2);flex:1">${time}</div>
-                <div style="font-family:var(--mono);font-size:11px;color:var(--ink-3)">${count}</div>
-              </div>`).join('')}
-          </div>` : '';
-
-        const insAndDays = `
-        <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:12px" class="class-ins-grid">
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-            <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Instructors by Founder Engagement</div>
-            <div style="font-size:11px;color:var(--ink-3);margin-bottom:14px">Which instructors draw the most Founders</div>
-            ${instructorRows}
-          </div>
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-            <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:10px">Best Days for Founders</div>
-            ${hasDays ? dayBars : '<div style="font-size:13px;color:var(--ink-3)">Day data unavailable</div>'}
-            ${timeBars}
-          </div>
-        </div>`;
-
-        const reformerNote = reformerClasses.length ? `
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 20px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Pilates Reformer — Paid Add-On (not included in Founder Membership)</div>
-          <div style="display:flex;gap:24px;flex-wrap:wrap">
-            ${reformerClasses.map(cl=>`<span style="font-size:13px;color:var(--ink-2)">${cl.name} <span style="font-family:var(--mono);color:var(--ink-3)">${cl.visits} visits</span></span>`).join('')}
-          </div>
-        </div>` : '';
-
-        return summaryRow + tableAndFreq + insAndDays + reformerNote;
-      })()}
-    </div>
-
-    ${divider()}
-
-    <!-- ─── 5. DORIAN'S ACTION LIST ──────────────────────────────── -->
-    <div style="margin-bottom:48px">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px">
-        <div>
-          <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Dorian's Action List</div>
-          <div style="font-size:13px;color:var(--ink-2);margin-bottom:4px">${atRiskCount} Founder Members to contact · ${newFounders.length} new members need follow-up</div>
-          ${(() => {
-            const mrrAtRisk = ((dorian.critical||[]).length + (dorian.watch||[]).length) * 149;
-            return mrrAtRisk > 0
-              ? `<div style="font-size:12px;font-weight:600;color:var(--red)">${fmtC(mrrAtRisk)}/month MRR at risk from critical + watch members</div>`
-              : '';
-          })()}
-        </div>
-        <button class="btn-primary" onclick="handleDorianDownload()">⬇ Download CSV</button>
-      </div>
-      ${renderHealthSummary(c)}
-      ${renderDorianList(dorian, newFounders)}
-    </div>
-
-  `; // end renderWeeklyBody
-}
-
-// ─── Monthly view ─────────────────────────────────────────────────
-function renderMonthly(weeks, dashData) {
-  if (!weeks || weeks.length < 2) {
-    return `
-    <div style="padding:48px 32px;text-align:center">
-      <div style="font-family:var(--display);font-size:20px;color:var(--ink);margin-bottom:8px">Not enough data yet</div>
-      <div style="font-size:14px;color:var(--ink-3)">Upload at least 2 weeks to see the monthly view.</div>
+  const pulse = (label, value, sub, color, wowHtml) => `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">${label}</div>
+      <div style="font-family:var(--display);font-size:28px;color:${color||'var(--ink)'};line-height:1.1">${value}</div>
+      <div style="font-size:11px;color:var(--ink-3);margin-top:6px">${sub}${wowHtml||''}</div>
     </div>`;
-  }
 
-  // Use the most recent 4 weeks
-  const recent = [...weeks].sort((a,b) => new Date(b.week_of) - new Date(a.week_of)).slice(0, 4).reverse();
-  const labels = recent.map(w => w.week_of);
+  const tabs = [
+    {id:'overview', label:'Overview'},
+    {id:'members',  label:'Members'},
+    {id:'revenue',  label:'Revenue'},
+    {id:'classes',  label:'Classes'},
+  ];
 
-  // Pull metrics from each week's stored claude data
-  const getM = (w, path, fallback=0) => {
-    try { return path.split('.').reduce((o,k) => o[k], w) ?? fallback; } catch { return fallback; }
-  };
+  const tabNav = `
+    <div class="tab-nav">
+      ${tabs.map(t => `
+        <button class="tab-btn" onclick="state.tab='${t.id}';render()"
+          style="font-weight:${t.id===tab?'600':'400'};background:${t.id===tab?'var(--surface)':'transparent'};color:${t.id===tab?'var(--green)':'var(--ink-3)'};box-shadow:${t.id===tab?'0 1px 3px rgba(0,0,0,0.08)':'none'}">${t.label}</button>
+      `).join('')}
+    </div>`;
 
-  // MRR trend
-  const mrrs        = recent.map(w => getM(w, 'membership.active_count') * 149);
-  const members     = recent.map(w => getM(w, 'membership.active_count'));
-  const netGrowths  = recent.map(w => getM(w, 'membership.net_growth'));
-  const churnRates  = recent.map(w => getM(w, 'membership.churn_rate_pct'));
-  const avgVisits   = recent.map(w => getM(w, 'avg_founder_visits') || 0);
+  // ─── TAB: OVERVIEW ──────────────────────────────────────────────
+  const tabOverview = `
+    <!-- 6 Pulse metrics -->
+    <div class="g3" style="margin-bottom:20px">
+      ${pulse('MRR', fmtC(r.mrr), 'Monthly recurring revenue', 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
+      ${pulse('Founder Members', m.active_count||'—', '${800-(m.active_count||0)} to full capacity', 'var(--ink)', wow(m.active_count, p?.membership?.active_count, false))}
+      ${pulse('Net Growth', (m.net_growth>0?'+':'')+m.net_growth, '${m.new_this_week||0} joined · ${m.churned_this_week||0} churned', (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
+      ${pulse('Member Health', hs.green||0, '<span style="color:var(--amber)">●${hs.amber||0} at risk</span> &nbsp;<span style="color:var(--red)">●${hs.red||0} urgent</span>', 'var(--green)')}
+      ${pulse('Avg Visits / Member', (c.avg_founder_visits||0)+'/wk', 'Target: 3+ per week', (c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)')}
+      ${pulse('Forecasted ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
+    </div>
 
-  // Aggregate class data across all weeks
-  const classAgg = {};
-  recent.forEach(w => {
-    (w.class_data || w.founder_classes || []).forEach(cl => {
-      if (!classAgg[cl.name]) classAgg[cl.name] = { name: cl.name, founder_visits: 0, visits: 0, weeks: 0 };
-      classAgg[cl.name].founder_visits += cl.founder_visits || 0;
-      classAgg[cl.name].visits         += cl.visits || 0;
-      classAgg[cl.name].weeks++;
-    });
-  });
-  const topClasses = Object.values(classAgg)
-    .filter(c => c.founder_visits > 0 && !c.name.toLowerCase().includes('reformer'))
-    .sort((a,b) => b.founder_visits - a.founder_visits).slice(0, 8)
-    .map(c => ({ ...c, founder_pct: c.visits > 0 ? Math.round(c.founder_visits/c.visits*100) : 0 }));
+    <!-- Progress bar -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:24px;box-shadow:var(--shadow)">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:500;color:var(--ink-2)">Progress to 800 Founder Members</div>
+        <div style="font-family:var(--mono);font-size:12px;color:var(--green)">${m.active_count||0} / 800 · ${m.progress_to_800_pct||0}%</div>
+      </div>
+      <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+        <div style="height:100%;background:var(--green);border-radius:3px;width:${Math.min(m.progress_to_800_pct||0,100)}%;transition:width 0.6s ease"></div>
+      </div>
+    </div>
 
-  // Aggregate frequency histograms
-  const freqAgg = { '0 visits':0, '1 visit':0, '2 visits':0, '3–4 visits':0, '5+ visits':0 };
-  recent.forEach(w => {
-    const h = w.founder_frequency_histogram || {};
-    Object.entries(h).forEach(([k,v]) => { if (freqAgg[k] !== undefined) freqAgg[k] += v; });
-  });
-  const freqAvg = Object.fromEntries(Object.entries(freqAgg).map(([k,v]) => [k, Math.round(v/recent.length)]));
+    <!-- Intelligence -->
+    <div style="background:var(--ink);border-radius:var(--radius-lg);padding:20px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:600;letter-spacing:0.14em;color:rgba(255,255,255,0.35);text-transform:uppercase;margin-bottom:10px">CEO BRIEFING · WEEK OF ${c.week_of||''}</div>
+      <div style="font-family:var(--display);font-size:20px;color:#fff;line-height:1.5;margin-bottom:12px" class="intel-headline">${intel.headline||'—'}</div>
+      ${intel.insight ? `<div style="font-size:14px;color:rgba(255,255,255,0.8);line-height:1.7;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px">${intel.insight}</div>` : ''}
+    </div>
 
-  // Aggregate instructors
-  const insAgg = {};
-  recent.forEach(w => {
-    (w.top_instructors || []).forEach(ins => {
-      if (!insAgg[ins.name]) insAgg[ins.name] = { name: ins.name, founder_visits: 0, visits: 0 };
-      insAgg[ins.name].founder_visits += ins.founder_visits || 0;
-      insAgg[ins.name].visits         += ins.visits || 0;
-    });
-  });
-  const topIns = Object.values(insAgg)
-    .map(i => ({ ...i, founder_pct: i.visits > 0 ? Math.round(i.founder_visits/i.visits*100) : 0 }))
-    .sort((a,b) => b.founder_visits - a.founder_visits).slice(0, 6);
+    <!-- Risk + Bright spot -->
+    <div class="g2" style="margin-bottom:12px">
+      <div style="background:var(--red-light);border:1px solid var(--red);border-radius:var(--radius-lg);padding:18px 20px">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--red);text-transform:uppercase;margin-bottom:8px">⚠ Risk</div>
+        <div style="font-size:14px;color:var(--ink);line-height:1.6">${intel.risk||'—'}</div>
+      </div>
+      <div style="background:var(--green-light);border:1px solid var(--green);border-radius:var(--radius-lg);padding:18px 20px">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--green);text-transform:uppercase;margin-bottom:8px">✦ Bright Spot</div>
+        <div style="font-size:14px;color:var(--ink);line-height:1.6">${intel.bright_spot||'—'}</div>
+      </div>
+    </div>
 
-  const totalNewMembers   = recent.reduce((s,w) => s + getM(w,'membership.new_this_week'), 0);
-  const totalChurned      = recent.reduce((s,w) => s + getM(w,'membership.churned_this_week'), 0);
-  const netMemberGrowth   = totalNewMembers - totalChurned;
-  const latestMRR         = mrrs[mrrs.length-1];
-  const earliestMRR       = mrrs[0];
-  const mrrGrowth         = latestMRR - earliestMRR;
-  const avgChurn          = (churnRates.reduce((s,v)=>s+v,0)/churnRates.length).toFixed(1);
-  const avgVisitsMonth    = (avgVisits.reduce((s,v)=>s+v,0)/avgVisits.filter(v=>v>0).length || 0).toFixed(1);
+    <!-- Actions -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px 24px;box-shadow:var(--shadow)">
+      <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Strategic Actions & Delegation</div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        ${(intel.actions||[]).map((act,i) => {
+          const isDeleg = act.toLowerCase().includes('dorian') || act.toLowerCase().includes('delegate') || act.toLowerCase().includes('team');
+          return `<div style="display:flex;gap:14px;align-items:flex-start">
+            <div style="width:26px;height:26px;border-radius:50%;background:${isDeleg?'var(--amber)':'var(--green)'};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${isDeleg?'D':i+1}</div>
+            <div>
+              <div style="font-size:10px;font-weight:600;color:${isDeleg?'var(--amber)':'var(--green)'};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">${isDeleg?'Delegate':'Strategic'}</div>
+              <div style="font-size:14px;color:var(--ink);line-height:1.6">${act}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
 
-  // Sparkline helper (inline SVG)
-  function sparkline(values, color='var(--green)', height=32, width=120) {
-    if (!values.length) return '';
-    const min = Math.min(...values), max = Math.max(...values);
-    const range = max - min || 1;
-    const pts = values.map((v,i) => {
-      const x = (i / (values.length-1)) * (width-4) + 2;
-      const y = height - 4 - ((v-min)/range) * (height-8);
-      return `${x},${y}`;
-    }).join(' ');
-    return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  }
+  // ─── TAB: MEMBERS ────────────────────────────────────────────────
+  const tabMembers = `
+    <div class="g4" style="margin-bottom:16px">
+      ${pulse('Active Members', m.active_count||'—', 'Founder Members on autopay', 'var(--ink)')}
+      ${pulse('New This Week', m.new_this_week||0, 'Joined as Founder Members', 'var(--green)')}
+      ${pulse('Churned', m.churned_this_week||0, fmtPct(m.churn_rate_pct)+' churn rate', (m.churned_this_week||0)>0?'var(--red)':'var(--ink)')}
+      ${pulse('Net Growth', (m.net_growth>0?'+':'')+m.net_growth, 'New minus churned', (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
+    </div>
 
-  const freqColors = {'0 visits':'var(--red)','1 visit':'var(--amber)','2 visits':'var(--amber)','3–4 visits':'var(--green)','5+ visits':'var(--green)'};
-  const freqTotal = Object.values(freqAvg).reduce((s,v)=>s+v,0);
-  const maxFreqVal = Math.max(...Object.values(freqAvg), 1);
+    ${renderHealthSummary(c)}
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;margin-top:24px">
+      <div>
+        <div style="font-size:15px;font-weight:600;color:var(--ink)">Dorian's Action List</div>
+        <div style="font-size:12px;color:var(--ink-3);margin-top:2px">${atRiskCount} members to contact · ${newFounders.length} new members need follow-up</div>
+      </div>
+      <button class="btn-primary" onclick="handleDorianDownload()">⬇ Download CSV</button>
+    </div>
+    ${renderDorianList(dorian, newFounders)}`;
+
+  // ─── TAB: REVENUE ────────────────────────────────────────────────
+  const tabRevenue = `
+    <div class="g2" style="margin-bottom:16px">
+      ${pulse('MRR', fmtC(r.mrr), 'Monthly Founder Member autopay', 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
+      ${pulse('Forecasted ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
+      ${pulse('Revenue / Member', fmtC(r.revenue_per_member), 'MRR ÷ ${m.active_count||0} members / month', 'var(--ink)')}
+      ${pulse('Weekly Sales', fmtC(r.total_weekly), 'Packs, singles & non-autopay', 'var(--ink)')}
+    </div>
+
+    <div class="g2">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">MRR Stability</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+          <span style="font-size:13px;color:var(--ink-2)">MRR as % of total</span>
+          <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">${r.mrr_pct||0}%</span>
+        </div>
+        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:10px">
+          <div style="height:100%;background:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'};border-radius:3px;width:${Math.min(r.mrr_pct||0,100)}%"></div>
+        </div>
+        <div style="font-size:12px;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">
+          ${(r.mrr_pct||0)>=70?'✓ MRR target met (>70%)':'Below 70% target — grow Founder Members to stabilise'}
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Pack & Class Sales</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+          <span style="font-size:13px;color:var(--ink-2)">Non-autopay this week</span>
+          <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--ink)">${fmtC(r.pack_and_class||r.total_weekly)}</span>
+        </div>
+        <div style="background:var(--amber-light);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--amber);margin-top:8px">
+          ↑ Pack & class buyers are Founder Member prospects — each is a warm conversion opportunity
+        </div>
+      </div>
+    </div>`;
+
+  // ─── TAB: CLASSES ────────────────────────────────────────────────
+  const tabClasses = `
+    <div class="g4" style="margin-bottom:16px">
+      ${pulse('Total Check-ins', (a.total_visits||0).toLocaleString(), 'All visitors this week', 'var(--ink)')}
+      ${pulse('Founder Visits', founderVisits, (c.avg_founder_visits||0)+' avg per member/week', 'var(--green)')}
+      ${pulse('Late Cancels', fmtPct(a.no_show_rate_pct||0), 'Of all bookings', (a.no_show_rate_pct||0)>10?'var(--amber)':'var(--ink)')}
+      ${pulse('First-Time Visitors', c.first_time_visitors||0, 'Acquisition pipeline this week', 'var(--green)')}
+    </div>
+
+    <div class="g2">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--green);text-transform:uppercase;margin-bottom:4px">Founder Member Classes</div>
+        <div style="font-size:11px;color:var(--ink-3);margin-bottom:16px">Ranked by Founder engagement %</div>
+        ${(c.founder_classes||[]).filter(cl=>!cl.name.toLowerCase().includes('reformer')).slice(0,6).map((cl,i)=>`
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div style="width:22px;height:22px;border-radius:50%;background:var(--green-light);color:var(--green);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:500;color:var(--ink)">${cl.name}</div>
+              <div style="font-size:11px;color:var(--ink-3)">${cl.founder_visits} Founder visits · ${cl.founder_pct}% of class</div>
+            </div>
+            <div style="font-family:var(--mono);font-size:12px;color:var(--green);font-weight:600">${cl.founder_pct}%</div>
+          </div>`).join('')}
+        ${!(c.founder_classes||[]).length?'<div style="font-size:13px;color:var(--ink-3)">No data</div>':''}
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">All Classes by Total Visits</div>
+        <div style="font-size:11px;color:var(--ink-3);margin-bottom:16px">Includes ClassPass & drop-ins</div>
+        ${(a.top_classes||[]).slice(0,6).map((cl,i)=>`
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div style="width:22px;height:22px;border-radius:50%;background:var(--surface-2);color:var(--ink-2);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:500;color:var(--ink)">${cl.name}</div>
+              <div style="font-size:11px;color:var(--ink-3)">${cl.visits} total · ${cl.founder_visits||0} Founders</div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  const tabContent = {overview:tabOverview, members:tabMembers, revenue:tabRevenue, classes:tabClasses}[tab] || tabOverview;
 
   return `
-  <!-- Monthly KPI row -->
-  <div style="margin-bottom:32px">
-    <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Last ${recent.length} Weeks · ${labels[0]} → ${labels[labels.length-1]}</div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px" class="monthly-kpi-grid">
+  <div style="max-width:1100px;margin:0 auto;padding:24px 16px 0" class="fu">
 
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Current MRR</div>
-        <div style="font-family:var(--display);font-size:26px;color:var(--green)">${fmtC(latestMRR)}</div>
-        <div style="font-size:11px;color:${mrrGrowth>=0?'var(--green)':'var(--red)'};margin-top:4px">${mrrGrowth>=0?'+':''}${fmtC(mrrGrowth)} over period</div>
-        <div style="margin-top:8px">${sparkline(mrrs)}</div>
+    <!-- Header -->
+    <div class="dash-header-wrap">
+      <div class="dash-header-left">
+        <div class="logo">P</div>
+        <div>
+          <div class="brand-name">Prana Wellness Club</div>
+          <div class="brand-sub">Week of ${c.week_of||''}</div>
+        </div>
       </div>
-
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Net Member Growth</div>
-        <div style="font-family:var(--display);font-size:26px;color:${netMemberGrowth>=0?'var(--green)':'var(--red)'}">${netMemberGrowth>=0?'+':''}${netMemberGrowth}</div>
-        <div style="font-size:11px;color:var(--ink-3);margin-top:4px">${totalNewMembers} joined · ${totalChurned} churned</div>
-        <div style="margin-top:8px">${sparkline(members,'var(--ink-2)')}</div>
+      <div class="dash-header-actions">
+        ${state.weeks&&state.weeks.length>1?`
+          <select class="week-select" onchange="switchWeek(this.value)">
+            ${state.weeks.map(w=>`<option value="${w.week_of}" ${w.week_of===state.selectedWeek?'selected':''}>${w.week_of}</option>`).join('')}
+          </select>`:''}
+        <button class="btn-secondary" onclick="showUpload()">↑ Upload</button>
       </div>
-
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Avg Weekly Churn</div>
-        <div style="font-family:var(--display);font-size:26px;color:${parseFloat(avgChurn)>5?'var(--red)':parseFloat(avgChurn)>3?'var(--amber)':'var(--ink)'}">${avgChurn}%</div>
-        <div style="font-size:11px;color:var(--ink-3);margin-top:4px">per week over period</div>
-        <div style="margin-top:8px">${sparkline(churnRates,'var(--red)')}</div>
-      </div>
-
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">Avg Visits / Founder</div>
-        <div style="font-family:var(--display);font-size:26px;color:${parseFloat(avgVisitsMonth)>=3?'var(--green)':parseFloat(avgVisitsMonth)>=2?'var(--amber)':'var(--red)'}">${avgVisitsMonth}</div>
-        <div style="font-size:11px;color:var(--ink-3);margin-top:4px">avg per week · target 3+</div>
-        <div style="margin-top:8px">${sparkline(avgVisits.filter(v=>v>0),'var(--amber)')}</div>
-      </div>
-
-    </div>
-  </div>
-
-  ${divider()}
-
-  <!-- Weekly breakdown table -->
-  <div style="margin-bottom:32px">
-    <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Week by Week</div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)">
-      <div style="display:grid;grid-template-columns:1.4fr repeat(5,1fr);padding:12px 18px;border-bottom:2px solid var(--border);background:var(--bg)" class="monthly-week-table">
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase">Week of</div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right">Members</div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right">Net</div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right" class="monthly-table-col-churn">Churn %</div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right">MRR</div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:var(--ink-3);text-transform:uppercase;text-align:right" class="monthly-table-col-visits">Avg Visits</div>
-      </div>
-      ${recent.map((w,i) => {
-        const net    = getM(w,'membership.net_growth');
-        const churn  = getM(w,'membership.churn_rate_pct');
-        const cnt    = getM(w,'membership.active_count');
-        const mrr    = cnt * 149;
-        const av     = getM(w,'avg_founder_visits') || 0;
-        const isLast = i === recent.length - 1;
-        return `
-        <div style="display:grid;grid-template-columns:1.4fr repeat(5,1fr);padding:12px 18px;border-bottom:1px solid var(--border);background:${isLast?'var(--green-light)':'var(--surface)'}" class="monthly-week-table">
-          <div style="font-size:13px;font-weight:${isLast?'600':'400'};color:var(--ink)">${w.week_of}${isLast?' ← latest':''}</div>
-          <div style="font-family:var(--mono);font-size:13px;color:var(--ink);text-align:right">${cnt}</div>
-          <div style="font-family:var(--mono);font-size:13px;color:${net>0?'var(--green)':net<0?'var(--red)':'var(--ink-3)'};text-align:right">${net>0?'+':''}${net}</div>
-          <div style="font-family:var(--mono);font-size:13px;color:${churn>5?'var(--red)':churn>3?'var(--amber)':'var(--ink)'};text-align:right" class="monthly-table-col-churn">${churn}%</div>
-          <div style="font-family:var(--mono);font-size:13px;color:var(--green);text-align:right">${fmtC(mrr)}</div>
-          <div style="font-family:var(--mono);font-size:13px;color:${av>=3?'var(--green)':av>=2?'var(--amber)':av>0?'var(--red)':'var(--ink-3)'};text-align:right" class="monthly-table-col-visits">${av||'—'}</div>
-        </div>`;
-      }).join('')}
-    </div>
-  </div>
-
-  ${divider()}
-
-  <!-- Class engagement + frequency side by side -->
-  <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:32px" class="monthly-class-grid">
-
-    <!-- Top classes by founder visits this period -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)">
-      <div style="padding:16px 18px;border-bottom:1px solid var(--border)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--green);text-transform:uppercase;margin-bottom:2px">Top Classes by Founder Visits</div>
-        <div style="font-size:11px;color:var(--ink-3)">Aggregated across all ${recent.length} weeks</div>
-      </div>
-      ${topClasses.length ? topClasses.map((cl,i) => {
-        const barColor = cl.founder_pct>=50?'var(--green)':cl.founder_pct>=25?'var(--amber)':'var(--border)';
-        return `
-        <div style="padding:10px 18px;display:flex;align-items:center;gap:12px;background:${i%2===1?'var(--bg)':'var(--surface)'};border-bottom:1px solid var(--border)">
-          <div style="flex:1;font-size:13px;font-weight:500;color:var(--ink)">${cl.name}</div>
-          <div style="font-family:var(--mono);font-size:12px;color:var(--green);width:60px;text-align:right">${cl.founder_visits} F</div>
-          <div style="width:80px;display:flex;align-items:center;gap:5px;justify-content:flex-end">
-            <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden;max-width:48px">
-              <div style="height:100%;width:${cl.founder_pct}%;background:${barColor};border-radius:3px"></div>
-            </div>
-            <div style="font-family:var(--mono);font-size:11px;color:${cl.founder_pct>=50?'var(--green)':cl.founder_pct>=25?'var(--amber)':'var(--ink-3)'};width:28px;text-align:right">${cl.founder_pct}%</div>
-          </div>
-        </div>`;
-      }).join('') : '<div style="padding:20px;font-size:13px;color:var(--ink-3)">No class data available</div>'}
     </div>
 
-    <!-- Avg visit frequency histogram -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Avg Visit Frequency</div>
-      <div style="font-size:11px;color:var(--ink-3);margin-bottom:16px">Averaged across ${recent.length} weeks</div>
-      ${freqTotal > 0 ? Object.entries(freqAvg).map(([label, count]) => {
-        const pct   = freqTotal > 0 ? Math.round(count/freqTotal*100) : 0;
-        const width = Math.round(count/maxFreqVal*100);
-        return `
-        <div style="margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-            <div style="font-size:12px;color:var(--ink-2)">${label}</div>
-            <div style="font-family:var(--mono);font-size:11px;color:var(--ink-3)">~${count} · ${pct}%</div>
-          </div>
-          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
-            <div style="height:100%;width:${width}%;background:${freqColors[label]||'var(--ink-3)'};border-radius:3px"></div>
-          </div>
-        </div>`;
-      }).join('') : '<div style="font-size:13px;color:var(--ink-3)">No frequency data yet</div>'}
-    </div>
+    ${tabNav}
+    <div style="padding-bottom:8px">${tabContent}</div>
 
   </div>
 
-  ${topIns.length ? `
-  ${divider()}
-  <div style="margin-bottom:32px">
-    <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Instructors — Aggregated Over Period</div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-      ${topIns.map((ins,i) => `
-        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;${i>0?'border-top:1px solid var(--border)':''}">
-          <div style="flex:1;font-size:13px;font-weight:500;color:var(--ink)">${ins.name}</div>
-          <div style="font-family:var(--mono);font-size:12px;color:var(--green);width:70px;text-align:right">${ins.founder_visits} F visits</div>
-          <div style="font-family:var(--mono);font-size:12px;color:var(--ink-3);width:60px;text-align:right">${ins.visits} total</div>
-          <div style="font-family:var(--mono);font-size:12px;color:${ins.founder_pct>=50?'var(--green)':ins.founder_pct>=25?'var(--amber)':'var(--ink-3)'};width:40px;text-align:right">${ins.founder_pct}%</div>
-        </div>`).join('')}
+  <!-- Chat bar -->
+  <div class="chat-bar" id="chatBar">
+    <div id="chatAnswerWrap"></div>
+    <div id="chatSuggestions" style="max-width:1100px;margin:0 auto 8px;display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px"></div>
+    <div class="chat-inner">
+      <textarea class="chat-input" id="chatInput" placeholder="Ask anything about your Founder Members…" rows="1"></textarea>
+      <button class="chat-send" id="chatSend">Ask Claude</button>
     </div>
-  </div>` : ''}
-  `;
+  </div>
+  <div style="height:110px"></div>`;
 }
 
-// ─── View mode toggle ─────────────────────────────────────────────
-function setViewMode(mode) {
-  state.viewMode = mode;
-  render();
+
+// ─── Chat ─────────────────────────────────────────────────────────
+async function sendChat() {
+  const input  = document.getElementById('chatInput');
+  const btn    = document.getElementById('chatSend');
+  const wrap   = document.getElementById('chatAnswerWrap');
+  const q      = (input ? input.value : '').trim();
+  if (!q) return;
+  btn.disabled = true;
+  btn.textContent = 'Thinking…';
+  wrap.innerHTML = '';
+  try {
+    const res    = await fetch('/api/chat', {
+      method:  'POST',
+      headers: {'Content-Type':'application/json'},
+      body:    JSON.stringify({ question: q, data: state.dashData && state.dashData.current })
+    });
+    const result = await res.json();
+    if (result.error) {
+      wrap.innerHTML = '<div class="chat-error">Error: ' + result.error + '</div>';
+    } else {
+      wrap.innerHTML = '<div class="chat-answer"><div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--green);text-transform:uppercase;margin-bottom:6px">Answer</div>' + result.answer + '<div style="font-size:11px;color:var(--ink-3);margin-top:8px;cursor:pointer" onclick="this.parentElement.parentElement.innerHTML=''">&#x2715; Dismiss</div></div>';
+    }
+  } catch(e) {
+    wrap.innerHTML = '<div class="chat-error">Could not reach API: ' + e.message + '</div>';
+  }
+  if (input) input.value = '';
+  btn.disabled = false;
+  btn.textContent = 'Ask Claude';
 }
+
+// ─── Suggested questions ─────────────────────────────────────────
+const SUGGESTED_QUESTIONS = [
+  // Retention
+  "Who should Dorian call today?",
+  "Which Founder Members haven't visited this week?",
+  "Who joined but hasn't visited yet?",
+  "Which members are visiting less than once a week?",
+  // Revenue
+  "What's my projected ARR if I add 10 members this month?",
+  "At current growth, when do we hit 100 members?",
+  "What would ARR be if churn dropped to 3%?",
+  // Classes
+  "Which classes do Founder Members attend most?",
+  "Which class should we add a second slot for?",
+  "Which instructor fills the most classes?",
+  // Growth
+  "How many ClassPass users came this week who could convert?",
+  "Who are my top 5 most loyal Founder Members?",
+  "Which new members are highest risk of churning?",
+];
+
+// ─── Chat input binding ───────────────────────────────────────────
+function bindChatEvents() {
+  const input = document.getElementById('chatInput');
+  const btn   = document.getElementById('chatSend');
+  const wrap  = document.getElementById('chatSuggestions');
+
+  if (input) input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+  });
+  if (btn) btn.addEventListener('click', sendChat);
+
+  // Render suggestion chips — show 4 random ones
+  if (wrap && state.view === 'dashboard') {
+    const shuffled = [...SUGGESTED_QUESTIONS].sort(() => Math.random() - 0.5).slice(0, 5);
+    wrap.innerHTML = shuffled.map(q =>
+      `<button class="chat-chip" onclick="document.getElementById('chatInput').value='${q.replace(/'/g,"\'")}';sendChat()">${q}</button>`
+    ).join('');
+  }
+}
+
+// ─── Health summary renderer ─────────────────────────────────────
 function renderHealthSummary(c) {
   const hs = c.health_summary || {};
   const total = (hs.green||0) + (hs.amber||0) + (hs.red||0) + (hs.frozen||0);
@@ -1165,7 +809,8 @@ function bindEvents() {
     dropZone.ondragover  = handleDragOver;
     dropZone.ondragleave = handleDragLeave;
     dropZone.ondrop      = handleDrop;
-  }
+  bindChatEvents();
+}
 }
 
 function showUpload() {
@@ -1390,114 +1035,25 @@ function aggregateData() {
 
   const attendRows = get('09_attendance_analysis');
   const classMap   = {};
-  const dayMap     = {0:'Sun',1:'Mon',2:'Tue',3:'Wed',4:'Thu',5:'Fri',6:'Sat'};
-  const founderDayCount   = {};   // day → founder visit count
-  const founderHourCount  = {};   // hour bucket → founder visit count
-  const instructorMap     = {};   // staff name → { visits, founder_visits }
   let late_cancel_count   = 0;
   let founder_visits_total = 0;
-  let same_day_bookings   = 0;
-  let total_bookings      = 0;
 
   attendRows.forEach(r => {
-    const name      = (r['Description']||'Unknown').trim();
-    const status    = (r['Status']||'').toLowerCase();
-    const clientId  = (r['Client ID']||'').trim();
+    const name     = (r['Description']||'Unknown').trim();
+    const status   = (r['Status']||'').toLowerCase();
+    const clientId = (r['Client ID']||'').trim();
     const isFounder = founderIds.has(clientId);
-    const staff     = (r['Staff']||r['Instructor']||'').trim();
 
-    // Parse class date/time
-    const classDate = r['Date'] || r['Class Date'] || r['Start Date'] || '';
-    const classTime = r['Time'] || r['Start Time'] || r['Class Time'] || '';
-    let dayOfWeek = null, hourBucket = null, signedSameDay = false;
-    try {
-      const dt = new Date(classDate + (classTime ? ' ' + classTime : ''));
-      if (!isNaN(dt)) {
-        dayOfWeek  = dayMap[dt.getDay()];
-        const hr   = dt.getHours();
-        hourBucket = hr < 9 ? 'Early (before 9am)' : hr < 12 ? 'Morning (9–12)' : hr < 15 ? 'Midday (12–3)' : hr < 18 ? 'Afternoon (3–6)' : 'Evening (6pm+)';
-      }
-      const signUpDate = r['Sign Up Date'] || r['Booked Date'] || '';
-      if (signUpDate && classDate) {
-        const diff = Math.floor((new Date(classDate) - new Date(signUpDate)) / 86400000);
-        if (!isNaN(diff)) { total_bookings++; if (diff <= 0) same_day_bookings++; }
-      }
-    } catch {}
+    if (!classMap[name]) classMap[name] = { name, visits:0, founder_visits:0, late_cancels:0 };
 
-    if (!classMap[name]) classMap[name] = { name, visits:0, founder_visits:0, late_cancels:0, no_shows:0 };
-
-    if (status.includes('signed in') || status === 'signed-in' || status.includes('checked in')) {
+    if (status.includes('signed')) {
       classMap[name].visits += 1;
-      if (isFounder) {
-        classMap[name].founder_visits += 1;
-        founder_visits_total += 1;
-        if (dayOfWeek)  founderDayCount[dayOfWeek]  = (founderDayCount[dayOfWeek]||0) + 1;
-        if (hourBucket) founderHourCount[hourBucket] = (founderHourCount[hourBucket]||0) + 1;
-      }
-      if (staff) {
-        if (!instructorMap[staff]) instructorMap[staff] = { visits:0, founder_visits:0 };
-        instructorMap[staff].visits += 1;
-        if (isFounder) instructorMap[staff].founder_visits += 1;
-      }
+      if (isFounder) { classMap[name].founder_visits += 1; founder_visits_total += 1; }
     } else if (status.includes('late cancel')) {
       classMap[name].late_cancels += 1;
       late_cancel_count++;
-    } else if (status.includes('no show')) {
-      classMap[name].no_shows = (classMap[name].no_shows||0) + 1;
     }
   });
-
-  // Attendance with revenue — 11: service breakdown for non-member paid visits
-  const revAttendRows = get('11_attendance_with_revenue');
-  const paidServiceMap = {};
-  revAttendRows.forEach(r => {
-    const svc    = (r['Description']||r['Service']||r['Class']||'').trim();
-    const status = (r['Status']||'').toLowerCase();
-    if (!svc) return;
-    if (!paidServiceMap[svc]) paidServiceMap[svc] = { name: svc, visits: 0 };
-    if (status.includes('signed') || status.includes('checked')) paidServiceMap[svc].visits += 1;
-  });
-  const paid_services = Object.values(paidServiceMap).filter(s => s.visits > 0).sort((a,b) => b.visits - a.visits).slice(0, 8);
-
-  // Retention report — 08: visit frequency per retention segment
-  const retentionRows = get('08_retention');
-  const retentionBySegment = {};
-  retentionRows.forEach(r => {
-    const seg    = (r['Segment']||r['Status']||r['Category']||'').trim();
-    const visits = parseInt(r['Visits']||r['Check Ins']||'0')||0;
-    if (!seg) return;
-    if (!retentionBySegment[seg]) retentionBySegment[seg] = { segment: seg, count: 0, visits: 0 };
-    retentionBySegment[seg].count  += 1;
-    retentionBySegment[seg].visits += visits;
-  });
-
-  // Founder frequency histogram from 07_retention_management
-  const freqBuckets = { '0 visits': 0, '1 visit': 0, '2 visits': 0, '3–4 visits': 0, '5+ visits': 0 };
-  Object.values(founderMap).forEach(f => {
-    const c = f.checkins_30 || 0;
-    if      (c === 0) freqBuckets['0 visits']++;
-    else if (c === 1) freqBuckets['1 visit']++;
-    else if (c === 2) freqBuckets['2 visits']++;
-    else if (c <= 4)  freqBuckets['3–4 visits']++;
-    else              freqBuckets['5+ visits']++;
-  });
-
-  // Top instructors by founder engagement
-  const top_instructors = Object.entries(instructorMap)
-    .map(([name, d]) => ({
-      name,
-      visits: d.visits,
-      founder_visits: d.founder_visits,
-      founder_pct: d.visits > 0 ? Math.round(d.founder_visits / d.visits * 100) : 0
-    }))
-    .filter(i => i.visits > 0 && i.name)
-    .sort((a,b) => b.founder_visits - a.founder_visits)
-    .slice(0, 8);
-
-  // Best days and times for founders
-  const founder_days  = Object.entries(founderDayCount).sort((a,b) => b[1]-a[1]).map(([day,count]) => ({ day, count }));
-  const founder_times = Object.entries(founderHourCount).sort((a,b) => b[1]-a[1]).map(([time,count]) => ({ time, count }));
-  const same_day_booking_pct = total_bookings > 0 ? Math.round(same_day_bookings / total_bookings * 100) : 0;
 
   const class_data = Object.values(classMap)
     .filter(c => c.visits > 0)
@@ -1540,13 +1096,6 @@ function aggregateData() {
     health_summary,
     avg_founder_visits,
     founder_classes,
-    founder_frequency_histogram: freqBuckets,
-    founder_days,
-    founder_times,
-    top_instructors,
-    paid_services,
-    same_day_booking_pct,
-    retention_segments: Object.values(retentionBySegment),
   };
 }
 
@@ -1589,11 +1138,6 @@ async function processFiles() {
     if (result.error) throw new Error(result.error);
     if (!result.ok)   throw new Error('Processing failed: ' + JSON.stringify(result));
 
-    // Merge raw computed data into current so class section works immediately
-    if (result.raw) {
-      result.current = { ...result.current, ...result.raw };
-    }
-
     state.dashData     = result;
     state.selectedWeek = result.current?.week_of;
 
@@ -1614,18 +1158,9 @@ async function processFiles() {
 // ─── Switch week ──────────────────────────────────────────────────
 async function switchWeek(weekOf) {
   state.selectedWeek = weekOf;
-  state.viewMode = 'weekly';
-  render();
-  try {
-    const result = await jsonp(SCRIPT_URL + '?action=read_week&week_of=' + encodeURIComponent(weekOf));
-    if (result.ok) {
-      // Merge raw data into current so class section renders correctly
-      if (result.raw) result.current = { ...result.current, ...result.raw };
-      state.dashData = result;
-      render();
-    }
-  } catch(e) {
-    state.error = 'Failed to load week: ' + e.message;
+  const result = await jsonp(SCRIPT_URL + '?action=read_week&week_of=' + encodeURIComponent(weekOf));
+  if (result.ok) {
+    state.dashData = result;
     render();
   }
 }
@@ -1639,7 +1174,6 @@ async function init() {
     const result = await jsonp(SCRIPT_URL + '?action=read_latest');
 
     if (result.ok && result.current) {
-      if (result.raw) result.current = { ...result.current, ...result.raw };
       state.dashData     = result;
       state.selectedWeek = result.current?.week_of;
 
