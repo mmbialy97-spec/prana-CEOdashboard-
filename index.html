@@ -853,31 +853,51 @@ function aggregateData() {
   }
 
   // Derive week_of from actual CSV data (sales report dates)
-  // This ensures the week is correct regardless of when the upload happens
-  let weekOf;
-  try {
-    const salesDates = salesRows
-      .map(r => { try { return new Date(r['Sale Date']||''); } catch { return null; } })
-      .filter(d => d && !isNaN(d));
-    if (salesDates.length) {
-      // Find the most recent date in the sales data
-      const maxDate = new Date(Math.max(...salesDates.map(d => d.getTime())));
-      // Get Monday of that week
-      const monday = new Date(maxDate);
-      monday.setDate(maxDate.getDate() - maxDate.getDay() + (maxDate.getDay() === 0 ? -6 : 1));
-      weekOf = monday.toISOString().split('T')[0];
-    }
-  } catch {}
-  // Fallback to Monday of current week if CSV dates unavailable
-  if (!weekOf) {
-    const d = new Date();
-    d.setDate(d.getDate() - d.getDay() + 1);
-    weekOf = d.toISOString().split('T')[0];
+  // Uses UTC-safe date formatting to avoid timezone shifts
+  function toYMD(date) {
+    // Format date as YYYY-MM-DD using UTC values to avoid timezone issues
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
   }
 
-  // Week start = Monday of the derived week
-  const weekStart = new Date(weekOf);
-  weekStart.setHours(0,0,0,0);
+  function getMondayOf(dateStr) {
+    // Parse MM/DD/YYYY safely
+    const parts = dateStr.split('/');
+    if (parts.length !== 3) return null;
+    // Create date in UTC to avoid timezone issues
+    const d = new Date(Date.UTC(parseInt(parts[2]), parseInt(parts[0])-1, parseInt(parts[1])));
+    if (isNaN(d)) return null;
+    const day = d.getUTCDay(); // 0=Sun, 1=Mon...
+    const diff = day === 0 ? -6 : 1 - day; // days to Monday
+    d.setUTCDate(d.getUTCDate() + diff);
+    return d;
+  }
+
+  let weekOf;
+  try {
+    const mondays = salesRows
+      .map(r => getMondayOf(r['Sale Date']||''))
+      .filter(Boolean);
+    if (mondays.length) {
+      // Use the most recent Monday found
+      const latest = new Date(Math.max(...mondays.map(d => d.getTime())));
+      weekOf = toYMD(latest);
+    }
+  } catch {}
+
+  // Fallback: Monday of current week in UTC
+  if (!weekOf) {
+    const now = new Date();
+    const day = now.getUTCDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + diff));
+    weekOf = toYMD(monday);
+  }
+
+  // Week start = Monday 00:00 UTC
+  const weekStart = new Date(weekOf + 'T00:00:00.000Z');
 
   const salesRows    = get('01_sales');
   const autopayRows  = get('02_autopay');
