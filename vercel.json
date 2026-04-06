@@ -3,5 +3,8 @@
     "api/*.js": {
       "maxDuration": 60
     }
+  },
+  "env": {
+    "NODE_VERSION": "20"
   }
 }
