@@ -852,52 +852,60 @@ function aggregateData() {
     return s;
   }
 
-  // Derive week_of from actual CSV data (sales report dates)
-  // Uses UTC-safe date formatting to avoid timezone shifts
-  function toYMD(date) {
-    // Format date as YYYY-MM-DD using UTC values to avoid timezone issues
-    const y = date.getUTCFullYear();
-    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(date.getUTCDate()).padStart(2, '0');
-    return y + '-' + m + '-' + d;
+  // Derive week_of from sales CSV dates
+  // Simple approach: find the most recent date, get its Monday
+  function parseMDY(str) {
+    if (!str) return null;
+    const p = str.trim().split('/');
+    if (p.length !== 3) return null;
+    const m = parseInt(p[0]), d = parseInt(p[1]), y = parseInt(p[2]);
+    if (!m || !d || !y) return null;
+    return { y, m, d };
   }
 
-  function getMondayOf(dateStr) {
-    // Parse MM/DD/YYYY safely
-    const parts = dateStr.split('/');
-    if (parts.length !== 3) return null;
-    // Create date in UTC to avoid timezone issues
-    const d = new Date(Date.UTC(parseInt(parts[2]), parseInt(parts[0])-1, parseInt(parts[1])));
-    if (isNaN(d)) return null;
-    const day = d.getUTCDay(); // 0=Sun, 1=Mon...
-    const diff = day === 0 ? -6 : 1 - day; // days to Monday
-    d.setUTCDate(d.getUTCDate() + diff);
-    return d;
+  function mondayOfDate(y, m, d) {
+    // Get day of week for this date (0=Sun,1=Mon,...,6=Sat)
+    const date = new Date(y, m - 1, d); // local date, no timezone shift
+    const dow = date.getDay(); // 0=Sun
+    const daysBack = dow === 0 ? 6 : dow - 1; // days to go back to Monday
+    date.setDate(date.getDate() - daysBack);
+    const yy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return yy + '-' + mm + '-' + dd;
   }
 
   let weekOf;
   try {
-    const mondays = salesRows
-      .map(r => getMondayOf(r['Sale Date']||''))
-      .filter(Boolean);
-    if (mondays.length) {
-      // Use the most recent Monday found
-      const latest = new Date(Math.max(...mondays.map(d => d.getTime())));
-      weekOf = toYMD(latest);
+    // Find the most recent date in sales CSV
+    let maxY = 0, maxM = 0, maxD = 0;
+    salesRows.forEach(r => {
+      const p = parseMDY(r['Sale Date']);
+      if (!p) return;
+      if (p.y > maxY || (p.y === maxY && p.m > maxM) || (p.y === maxY && p.m === maxM && p.d > maxD)) {
+        maxY = p.y; maxM = p.m; maxD = p.d;
+      }
+    });
+    if (maxY > 0) {
+      weekOf = mondayOfDate(maxY, maxM, maxD);
     }
-  } catch {}
+  } catch(e) {}
 
-  // Fallback: Monday of current week in UTC
+  // Fallback: Monday of current local week
   if (!weekOf) {
     const now = new Date();
-    const day = now.getUTCDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + diff));
-    weekOf = toYMD(monday);
+    const dow = now.getDay();
+    const daysBack = dow === 0 ? 6 : dow - 1;
+    now.setDate(now.getDate() - daysBack);
+    const yy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    weekOf = yy + '-' + mm + '-' + dd;
   }
 
-  // Week start = Monday 00:00 UTC
-  const weekStart = new Date(weekOf + 'T00:00:00.000Z');
+  // Week start = Monday midnight local time
+  const weekStart = new Date(weekOf);
+  weekStart.setHours(0, 0, 0, 0);
 
   const salesRows    = get('01_sales');
   const autopayRows  = get('02_autopay');
