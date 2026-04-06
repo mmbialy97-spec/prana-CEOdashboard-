@@ -36,6 +36,18 @@ export default async function handler(req, res) {
       peak_days:           (data.peak_days          || []).slice(0, 7),
     };
 
+    // Add previous week context to slim data before sending to Claude
+    if (previous) {
+      slimData.previous_week = {
+        week_of:       previous.week_of,
+        active_count:  previous.membership?.active_count || previous.active_count || 0,
+        new_this_week: previous.membership?.new_this_week || 0,
+        churned:       previous.membership?.churned_this_week || 0,
+        mrr:           previous.revenue?.mrr || previous.autopay_total || 0,
+        avg_visits:    previous.avg_founder_visits || 0,
+      };
+    }
+
     // 1. Call Claude
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -93,18 +105,6 @@ export default async function handler(req, res) {
       const prevData = JSON.parse(prevClean);
       if (prevData.ok) previous = prevData.data;
     } catch { /* optional */ }
-
-    // Include previous week summary in slim data for Claude context
-    if (previous) {
-      slimData.previous_week = {
-        week_of:       previous.week_of,
-        active_count:  previous.membership?.active_count || previous.active_count || 0,
-        new_this_week: previous.membership?.new_this_week || 0,
-        churned:       previous.membership?.churned_this_week || 0,
-        mrr:           previous.revenue?.mrr || previous.autopay_total || 0,
-        avg_visits:    previous.avg_founder_visits || 0,
-      };
-    }
 
     // Note: saving is handled separately by /api/save after browser merges class data
     return res.status(200).json({ ok: true, current: result, previous });
@@ -171,7 +171,7 @@ ${JSON.stringify(data)}
 INTELLIGENCE — CEO LEVEL. Qualitative AND quantitative. Only reference Founder Members.
 
 PREVIOUS WEEK CONTEXT (if available, use for trajectory and trend analysis):
-${slimData.previous_week ? JSON.stringify(slimData.previous_week) : 'No previous week data yet'}
+${data.previous_week ? JSON.stringify(data.previous_week) : 'No previous week data yet'}
 
 headline: One punchy sentence with the most important business reality. If previous week data exists, reference the trajectory (e.g. "Up 11 members over 2 weeks" or "Second consecutive week of net negative growth").
 
