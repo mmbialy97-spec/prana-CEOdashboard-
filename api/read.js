@@ -35,13 +35,16 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: false, message: 'No data yet' });
     }
 
-    // Normalise: promote fields from current.raw up to current if missing
-    // This handles data saved by older versions of save.js
-    if (data.current) {
-      data.current = normalise(data.current);
-    }
-    if (data.previous) {
-      data.previous = normalise(data.previous);
+    // Normalise current and previous
+    if (data.current) data.current = normalise(data.current);
+    if (data.previous) data.previous = normalise(data.previous);
+
+    // Normalise arrays of weeks (for read_weeks action)
+    if (data.weeks) {
+      data.weeks = data.weeks.map(w => ({
+        ...w,
+        week_of: cleanDate(w.week_of)
+      }));
     }
 
     return res.status(200).json(data);
@@ -51,32 +54,62 @@ export default async function handler(req, res) {
   }
 }
 
+// Clean any timestamp back to YYYY-MM-DD
+function cleanDate(dateStr) {
+  if (!dateStr) return dateStr;
+  const s = String(dateStr);
+  // Already clean
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // ISO timestamp — extract date part in UTC
+  if (s.includes('T')) {
+    const d = new Date(s);
+    if (!isNaN(d)) {
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth()+1).padStart(2,'0');
+      const day = String(d.getUTCDate()).padStart(2,'0');
+      return y+'-'+m+'-'+day;
+    }
+  }
+  return s;
+}
+
 function normalise(c) {
   if (!c) return c;
   const raw = c.raw || {};
 
-  // Promote enriched fields from raw if not already at top level
-  if (!c.health_summary     && raw.health_summary)     c.health_summary     = raw.health_summary;
-  if (!c.avg_founder_visits && raw.avg_founder_visits) c.avg_founder_visits = raw.avg_founder_visits;
-  if (!c.class_data         && raw.class_data)         c.class_data         = raw.class_data;
-  if (!c.founder_classes    && raw.founder_classes)    c.founder_classes    = raw.founder_classes;
-  if (!c.peak_times         && raw.founder_times)      c.peak_times         = raw.founder_times;
-  if (!c.peak_days          && raw.founder_days)       c.peak_days          = raw.founder_days;
-  if (!c.first_time_visitors&& raw.first_visit_count)  c.first_time_visitors= raw.first_visit_count;
+  // Clean week_of date
+  if (c.week_of) c.week_of = cleanDate(c.week_of);
 
-  // Normalise instructor data — old format used top_instructors
+  // Promote enriched fields from raw if missing at top level (old save format)
+  if (!c.health_summary      && raw.health_summary)     c.health_summary      = raw.health_summary;
+  if (!c.avg_founder_visits  && raw.avg_founder_visits) c.avg_founder_visits  = raw.avg_founder_visits;
+  if (!c.class_data          && raw.class_data)         c.class_data          = raw.class_data;
+  if (!c.founder_classes     && raw.founder_classes)    c.founder_classes     = raw.founder_classes;
+  if (!c.first_time_visitors && raw.first_visit_count)  c.first_time_visitors = raw.first_visit_count;
+
+  // Peak times — old format used founder_times
+  if (!c.peak_times && raw.founder_times) {
+    c.peak_times = raw.founder_times.map(t => ({ time: t.time, visits: t.count }));
+  }
+  // Peak days — old format used founder_days
+  if (!c.peak_days && raw.founder_days) {
+    c.peak_days = raw.founder_days.map(d => ({ day: d.day, visits: d.count }));
+  }
+  // Instructor data — old format used top_instructors
   if (!c.instructor_data && raw.top_instructors) {
     c.instructor_data = raw.top_instructors.map(i => ({
-      name:          i.name,
-      visits:        i.visits,
-      classes_taught: 0,
-      avg_per_class: 0,
+      name: i.name, visits: i.visits,
+      classes_taught: 0, avg_per_class: 0,
     }));
   }
 
-  // Normalise dorian — old format may be missing never_visited
-  if (c.dorian && !c.dorian.never_visited) {
-    c.dorian.never_visited = [];
+  // Ensure dorian has all tiers including never_visited
+  if (c.dorian) {
+    if (!c.dorian.never_visited) c.dorian.never_visited = [];
+    if (!c.dorian.critical)      c.dorian.critical = [];
+    if (!c.dorian.watch)         c.dorian.watch = [];
+    if (!c.dorian.lost)          c.dorian.lost = [];
+    if (!c.dorian.win_back)      c.dorian.win_back = [];
   }
 
   return c;
