@@ -1438,17 +1438,16 @@ async function loadAllWeeks() {
       return;
     }
 
-    // Load each week's full data in parallel
-    const results = await Promise.all(
-      weeks.map(w =>
-        fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(w.week_of))
-          .then(r => r.json())
-          .then(d => d.ok ? d.current : null)
-          .catch(() => null)
-      )
-    );
+    // Load each week sequentially to avoid overwhelming Apps Script
+    const results = [];
+    for (const w of weeks) {
+      try {
+        const r = await fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(w.week_of)).then(r => r.json());
+        if (r.ok && r.current) results.push(r.current);
+      } catch {}
+    }
 
-    state.allWeeksData    = results.filter(Boolean);
+    state.allWeeksData    = results;
     state.allWeeksLoading = false;
     render();
   } catch {
@@ -1459,12 +1458,23 @@ async function loadAllWeeks() {
 
 // ─── Switch week ──────────────────────────────────────────────────
 async function switchWeek(weekOf) {
+  if (state.selectedWeek === weekOf) return; // already on this week
   state.selectedWeek = weekOf;
-  const result = await fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(weekOf)).then(r => r.json());
-  if (result.ok) {
-    state.dashData = result;
-    render();
+  state.view = 'loading';
+  render();
+  try {
+    const result = await fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(weekOf)).then(r => r.json());
+    if (result.ok && result.current) {
+      state.dashData = result;
+      state.tab = 'overview'; // reset to overview when switching weeks
+      state.view = 'dashboard';
+    } else {
+      state.view = 'dashboard'; // stay on dashboard even if week not found
+    }
+  } catch {
+    state.view = 'dashboard';
   }
+  render();
 }
 
 // ─── Init — load latest data on open ─────────────────────────────
