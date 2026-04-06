@@ -864,15 +864,22 @@ function aggregateData() {
   }
 
   function mondayOfDate(y, m, d) {
-    // Get day of week for this date (0=Sun,1=Mon,...,6=Sat)
-    const date = new Date(y, m - 1, d); // local date, no timezone shift
-    const dow = date.getDay(); // 0=Sun
-    const daysBack = dow === 0 ? 6 : dow - 1; // days to go back to Monday
-    date.setDate(date.getDate() - daysBack);
-    const yy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
-    return yy + '-' + mm + '-' + dd;
+    // Pure arithmetic day-of-week (Sakamoto's algorithm) — no Date object, no timezone issues
+    const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+    let yr = y;
+    if (m < 3) yr--;
+    const dow = (yr + Math.floor(yr/4) - Math.floor(yr/100) + Math.floor(yr/400) + t[m-1] + d) % 7;
+    // dow: 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat
+    const daysBack = dow === 0 ? 6 : dow - 1;
+    // Subtract daysBack from date without using Date object
+    let rd = d - daysBack, rm = m, ry = y;
+    if (rd < 1) {
+      rm--;
+      if (rm < 1) { rm = 12; ry--; }
+      const daysInPrevMonth = [0,31,28+(ry%4===0&&(ry%100!==0||ry%400===0)?1:0),31,30,31,30,31,31,30,31,30,31][rm];
+      rd = daysInPrevMonth + rd;
+    }
+    return ry + '-' + String(rm).padStart(2,'0') + '-' + String(rd).padStart(2,'0');
   }
 
   let weekOf;
@@ -903,9 +910,9 @@ function aggregateData() {
     weekOf = yy + '-' + mm + '-' + dd;
   }
 
-  // Week start = Monday midnight local time
-  const weekStart = new Date(weekOf);
-  weekStart.setHours(0, 0, 0, 0);
+  // Week start = Monday midnight — parse weekOf string manually to avoid timezone issues
+  const [wsY, wsM, wsD] = weekOf.split('-').map(Number);
+  const weekStart = new Date(wsY, wsM - 1, wsD, 0, 0, 0, 0);
 
   const salesRows    = get('01_sales');
   const autopayRows  = get('02_autopay');
