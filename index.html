@@ -147,7 +147,6 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 <div id="root"></div>
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyyqmSW4DM178V3C9W1H4Isnhh_t8bhwo1V1yLVjpAzvdSeoXaHIhkpcqfHjQjbfe-K/exec';
 
 const EXPECTED = [
   {key:'01_sales',                  label:'Sales Report',               group:'Revenue'},
@@ -175,6 +174,8 @@ let state = {
   dashData: null,
   weeks: [],
   selectedWeek: null,
+  allWeeksData: [],     // full data for all weeks (loaded when Trends tab opened)
+  allWeeksLoading: false,
   error: null,
 };
 
@@ -401,6 +402,7 @@ function renderDashboard() {
     {id:'members',  label:'Members'},
     {id:'revenue',  label:'Revenue'},
     {id:'classes',  label:'Classes'},
+    {id:'trends',   label:'Trends'},
   ];
 
   const tabNav = `
@@ -607,7 +609,7 @@ function renderDashboard() {
       </div>
     </div>`;
 
-  const tabContent = {overview:tabOverview, members:tabMembers, revenue:tabRevenue, classes:tabClasses}[tab] || tabOverview;
+  const tabContent = {overview:tabOverview, members:tabMembers, revenue:tabRevenue, classes:tabClasses, trends:renderTrends()}[tab] || tabOverview;
 
   return `
   <div style="max-width:1100px;margin:0 auto;padding:24px 16px 0" class="fu">
@@ -1114,58 +1116,223 @@ function aggregateData() {
   };
 }
 
-// ─── JSONP helper — bypasses CORS for GET requests ───────────────
-function jsonp(url) {
-  return new Promise((resolve, reject) => {
-    const cb = 'cb_' + Date.now();
-    const script = document.createElement('script');
-    script.src = url + '&callback=' + cb;
-    window[cb] = (data) => {
-      delete window[cb];
-      document.body.removeChild(script);
-      resolve(data);
-    };
-    script.onerror = () => {
-      delete window[cb];
-      document.body.removeChild(script);
-      reject(new Error('JSONP request failed'));
-    };
-    document.body.appendChild(script);
-  });
-}
 
-// ─── Send to Apps Script via JSONP ───────────────────────────────
+// ─── Process & save ───────────────────────────────────────────────
 async function processFiles() {
+  const allReady = EXPECTED.every(e => state.fileMap[e.key]?.status === 'ok');
+  if (!allReady) { alert('Please upload all 12 CSV files first.'); return; }
+
   state.processing = true;
   state.error = null;
   render();
 
   try {
-    const payload = aggregateData();
-    console.log('Sending to Vercel API...');
+    // 1. Aggregate all browser-side data (class breakdown, health, instructors etc.)
+    const browserData = aggregateData();
 
-    const result = await fetch('/api/process', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).then(r => r.json());
+    // 2. Send to Vercel — Claude analyses, saves to Sheets, returns result
+    const res = await fetch('/api/process', {
+      method:  'POST',
+      headers: {'Content-Type':'application/json'},
+      body:    JSON.stringify(browserData)
+    });
+    const result = await res.json();
 
-    if (result.error) throw new Error(result.error);
-    if (!result.ok)   throw new Error('Processing failed: ' + JSON.stringify(result));
+    if (!result.ok) throw new Error(result.error || 'Process failed');
 
-    state.dashData     = result;
-    state.selectedWeek = result.current?.week_of;
+    // 3. Merge browser-calculated fields into the Claude result
+    // These are not in the Claude response but are needed for the dashboard
+    const current = result.current;
+    current.health_summary    = browserData.health_summary;
+    current.avg_founder_visits = browserData.avg_founder_visits;
+    current.founder_classes   = browserData.founder_classes;
+    current.instructor_data   = browserData.instructor_data;
+    current.peak_times        = browserData.peak_times;
+    current.peak_days         = browserData.peak_days;
+    current.new_founder_members = browserData.new_founder_members;
+    current.first_time_visitors = browserData.first_time_visitors;
+    current.class_data        = browserData.class_data;
 
-    const weeksData = await jsonp(SCRIPT_URL + '?action=read_weeks');
+    // 4. Save enriched result back to Sheets via /api/save
+    await fetch('/api/save', {
+      method:  'POST',
+      headers: {'Content-Type':'application/json'},
+      body:    JSON.stringify({ week_of: current.week_of, data: current })
+    });
+
+    // 5. Update local state and reload week list
+    state.dashData     = { current, previous: result.previous };
+    state.selectedWeek = current.week_of;
+    state.allWeeksData = []; // reset so Trends tab reloads fresh data
+
+    const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
     state.weeks = weeksData.weeks || [];
 
     state.processing = false;
-    state.view       = 'dashboard';
-    render();
+    state.view = 'dashboard';
 
   } catch(err) {
     state.processing = false;
-    state.error      = 'Error: ' + err.message;
+    state.error = err.message;
+    state.view  = 'upload';
+  }
+
+  render();
+}
+
+
+// ─── Trends tab ───────────────────────────────────────────────────
+function renderTrends() {
+  const weeks = state.allWeeksData;
+  const n     = weeks.length;
+
+  // If not loaded yet, trigger load and show spinner
+  if (!n && !state.allWeeksLoading) {
+    loadAllWeeks();
+    return '<div style="text-align:center;padding:60px 20px"><div class="processing-spinner" style="margin:0 auto 16px"></div><div style="font-size:14px;color:var(--ink-3)">Loading all weeks…</div></div>';
+  }
+  if (state.allWeeksLoading) {
+    return '<div style="text-align:center;padding:60px 20px"><div class="processing-spinner" style="margin:0 auto 16px"></div><div style="font-size:14px;color:var(--ink-3)">Loading all weeks…</div></div>';
+  }
+  if (n < 2) {
+    return '<div style="text-align:center;padding:60px 20px"><div style="font-size:14px;color:var(--ink-3)">Upload at least 2 weeks to see trends.</div></div>';
+  }
+
+  // Sort oldest → newest
+  const sorted = [...weeks].sort((a,b) => new Date(a.week_of) - new Date(b.week_of));
+  const first  = sorted[0];
+  const latest = sorted[n-1];
+
+  // Aggregations
+  const totalNewMembers   = sorted.reduce((s,w) => s + (w.membership?.new_this_week||0), 0);
+  const totalChurned      = sorted.reduce((s,w) => s + (w.membership?.churned_this_week||0), 0);
+  const totalNetGrowth    = sorted.reduce((s,w) => s + (w.membership?.net_growth||0), 0);
+  const totalVisits       = sorted.reduce((s,w) => s + (w.attendance?.total_visits||0), 0);
+  const avgChurnRate      = sorted.reduce((s,w) => s + (w.membership?.churn_rate_pct||0), 0) / n;
+  const avgVisitsPerMember= sorted.reduce((s,w) => s + (w.avg_founder_visits||0), 0) / n;
+  const avgNewPerWeek     = Math.round(totalNewMembers / n * 10) / 10;
+  const avgChurnPerWeek   = Math.round(totalChurned / n * 10) / 10;
+  const firstMRR          = first.revenue?.mrr || 0;
+  const latestMRR         = latest.revenue?.mrr || 0;
+  const mrrGrowth         = latestMRR - firstMRR;
+  const firstMembers      = first.membership?.active_count || 0;
+  const latestMembers     = latest.membership?.active_count || 0;
+  const memberGrowth      = latestMembers - firstMembers;
+
+  // Best and worst weeks
+  const bestMRRWeek     = sorted.reduce((best,w) => (w.revenue?.mrr||0) > (best.revenue?.mrr||0) ? w : best, sorted[0]);
+  const worstChurnWeek  = sorted.reduce((worst,w) => (w.membership?.churned_this_week||0) > (worst.membership?.churned_this_week||0) ? w : worst, sorted[0]);
+  const bestGrowthWeek  = sorted.reduce((best,w) => (w.membership?.new_this_week||0) > (best.membership?.new_this_week||0) ? w : best, sorted[0]);
+
+  const trendCard = (label, value, sub, color) => `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">
+      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">${label}</div>
+      <div style="font-family:var(--display);font-size:26px;color:${color||'var(--ink)'};line-height:1.1">${value}</div>
+      <div style="font-size:11px;color:var(--ink-3);margin-top:5px">${sub}</div>
+    </div>`;
+
+  const wowArrow = (val) => val > 0 ? '<span style="color:var(--green)">↑</span>' : val < 0 ? '<span style="color:var(--red)">↓</span>' : '';
+
+  return `
+    <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">${n} weeks of data · ${first.week_of} → ${latest.week_of}</div>
+
+    <!-- Member growth -->
+    <div style="font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.08em">Membership</div>
+    <div class="g3" style="margin-bottom:20px">
+      ${trendCard('Members Now', latestMembers, 'Started at '+firstMembers+' · '+wowArrow(memberGrowth)+' '+Math.abs(memberGrowth)+' total growth', memberGrowth >= 0 ? 'var(--green)' : 'var(--red)')}
+      ${trendCard('Total New Members', totalNewMembers, avgNewPerWeek+' avg per week', 'var(--green)')}
+      ${trendCard('Total Churned', totalChurned, avgChurnPerWeek+' avg per week · '+Math.round(avgChurnRate*10)/10+'% avg churn rate', totalChurned > 0 ? 'var(--red)' : 'var(--ink)')}
+    </div>
+
+    <!-- Revenue -->
+    <div style="font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.08em">Revenue</div>
+    <div class="g3" style="margin-bottom:20px">
+      ${trendCard('MRR Now', fmtC(latestMRR), 'Started at '+fmtC(firstMRR)+' · '+wowArrow(mrrGrowth)+fmtC(Math.abs(mrrGrowth))+' growth', 'var(--green)')}
+      ${trendCard('Forecasted ARR', fmtC(latestMRR*12), 'Based on current MRR', 'var(--green)')}
+      ${trendCard('Revenue / Member', fmtC(latest.revenue?.revenue_per_member||0), 'Latest week · started at '+fmtC(first.revenue?.revenue_per_member||0), 'var(--ink)')}
+    </div>
+
+    <!-- Attendance -->
+    <div style="font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.08em">Attendance</div>
+    <div class="g3" style="margin-bottom:20px">
+      ${trendCard('Total Check-ins', totalVisits.toLocaleString(), 'Across all '+n+' weeks', 'var(--ink)')}
+      ${trendCard('Avg Visits / Member', Math.round(avgVisitsPerMember*10)/10+'/wk', 'Average across all weeks · target 3+', (avgVisitsPerMember>=3?'var(--green)':avgVisitsPerMember>=2?'var(--amber)':'var(--red)'))}
+      ${trendCard('Net Growth Total', (totalNetGrowth>=0?'+':'')+totalNetGrowth, 'Members gained minus lost over '+n+' weeks', totalNetGrowth>=0?'var(--green)':'var(--red)')}
+    </div>
+
+    <!-- Notable weeks -->
+    <div style="font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.08em">Notable Weeks</div>
+    <div class="g3" style="margin-bottom:20px">
+      ${trendCard('Best MRR Week', fmtC(bestMRRWeek.revenue?.mrr||0), bestMRRWeek.week_of, 'var(--green)')}
+      ${trendCard('Best Growth Week', '+'+(bestGrowthWeek.membership?.new_this_week||0)+' members', bestGrowthWeek.week_of, 'var(--green)')}
+      ${trendCard('Highest Churn Week', (worstChurnWeek.membership?.churned_this_week||0)+' churned', worstChurnWeek.week_of, 'var(--red)')}
+    </div>
+
+    <!-- Week by week table -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
+      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Week by Week</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border)">
+              <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">Week</th>
+              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">Members</th>
+              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">New</th>
+              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">Churned</th>
+              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">MRR</th>
+              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">Visits</th>
+              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">Avg Visits</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sorted.map((w,i) => {
+              const isLatest = i === sorted.length - 1;
+              return '<tr style="border-bottom:1px solid var(--border);background:' + (isLatest ? 'var(--green-light)' : 'transparent') + '">' +
+                '<td style="padding:9px 10px;font-weight:' + (isLatest ? '600' : '400') + ';color:var(--ink);white-space:nowrap">' + w.week_of + (isLatest ? ' ★' : '') + '</td>' +
+                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:var(--ink)">' + (w.membership?.active_count||'—') + '</td>' +
+                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:var(--green)">+' + (w.membership?.new_this_week||0) + '</td>' +
+                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:' + ((w.membership?.churned_this_week||0) > 0 ? 'var(--red)' : 'var(--ink-3)') + '">' + (w.membership?.churned_this_week||0) + '</td>' +
+                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:var(--green)">' + fmtC(w.revenue?.mrr||0) + '</td>' +
+                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:var(--ink)">' + (w.attendance?.total_visits||0).toLocaleString() + '</td>' +
+                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:' + ((w.avg_founder_visits||0) >= 3 ? 'var(--green)' : 'var(--amber)') + '">' + (w.avg_founder_visits||0) + '/wk</td>' +
+              '</tr>';
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ─── Load all weeks data ──────────────────────────────────────────
+async function loadAllWeeks() {
+  if (state.allWeeksLoading) return;
+  state.allWeeksLoading = true;
+  render();
+
+  try {
+    const weeks = state.weeks;
+    if (!weeks.length) {
+      state.allWeeksData    = [];
+      state.allWeeksLoading = false;
+      render();
+      return;
+    }
+
+    // Load each week's full data in parallel
+    const results = await Promise.all(
+      weeks.map(w =>
+        fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(w.week_of))
+          .then(r => r.json())
+          .then(d => d.ok ? d.current : null)
+          .catch(() => null)
+      )
+    );
+
+    state.allWeeksData    = results.filter(Boolean);
+    state.allWeeksLoading = false;
+    render();
+  } catch {
+    state.allWeeksLoading = false;
     render();
   }
 }
@@ -1173,7 +1340,7 @@ async function processFiles() {
 // ─── Switch week ──────────────────────────────────────────────────
 async function switchWeek(weekOf) {
   state.selectedWeek = weekOf;
-  const result = await jsonp(SCRIPT_URL + '?action=read_week&week_of=' + encodeURIComponent(weekOf));
+  const result = await fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(weekOf)).then(r => r.json());
   if (result.ok) {
     state.dashData = result;
     render();
@@ -1186,13 +1353,13 @@ async function init() {
   render();
 
   try {
-    const result = await jsonp(SCRIPT_URL + '?action=read_latest');
+    const result = await fetch('/api/read?action=read_latest').then(r => r.json());
 
     if (result.ok && result.current) {
       state.dashData     = result;
       state.selectedWeek = result.current?.week_of;
 
-      const weeksData = await jsonp(SCRIPT_URL + '?action=read_weeks');
+      const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
       state.weeks     = weeksData.weeks || [];
 
       state.view = 'dashboard';
