@@ -51,37 +51,8 @@ export default async function handler(req, res) {
     result.week_of     = data.week_of;
     result.uploaded_at = new Date().toISOString();
 
-    // 2. Save to Apps Script via POST body encoded as JSON in a GET param
-    // We save a compact version to keep the URL small
+    // 2. Get previous week for WoW comparison
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyyqmSW4DM178V3C9W1H4Isnhh_t8bhwo1V1yLVjpAzvdSeoXaHIhkpcqfHjQjbfe-K/exec';
-
-    // Strip large arrays from what we save to keep URL short
-    // Apps Script only needs the processed metrics + small dorian list
-    const toSave = {
-      ...result,
-      dorian: {
-        critical: (result.dorian?.critical || []).slice(0, 10),
-        watch:    (result.dorian?.watch    || []).slice(0, 10),
-        lost:     (result.dorian?.lost     || []).slice(0, 10),
-        win_back: (result.dorian?.win_back || []).slice(0, 10),
-      }
-    };
-
-    const saveEncoded = encodeURIComponent(JSON.stringify(toSave));
-
-    // Only save if payload is small enough
-    if (saveEncoded.length < 8000) {
-      try {
-        await fetch(APPS_SCRIPT_URL + '?action=save&week_of=' +
-          encodeURIComponent(data.week_of) + '&data=' + saveEncoded);
-      } catch (e) {
-        result.save_warning = 'Save failed: ' + e.message;
-      }
-    } else {
-      result.save_warning = 'Data too large to save (' + saveEncoded.length + ' chars)';
-    }
-
-    // 3. Get previous week
     let previous = null;
     try {
       const prevRes  = await fetch(APPS_SCRIPT_URL + '?action=get_previous&week_of=' + encodeURIComponent(data.week_of));
@@ -89,6 +60,7 @@ export default async function handler(req, res) {
       if (prevData.ok) previous = prevData.data;
     } catch { /* optional */ }
 
+    // Note: saving is handled separately by /api/save after browser merges class data
     return res.status(200).json({ ok: true, current: result, previous });
 
   } catch (err) {
