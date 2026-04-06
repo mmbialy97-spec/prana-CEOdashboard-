@@ -13,10 +13,28 @@ export default async function handler(req, res) {
     const key = process.env.ANTHROPIC_KEY;
     if (!key) return res.status(500).json({ error: 'ANTHROPIC_KEY not set' });
 
-    // Cap no_return_members to 20 before sending to Claude
-    if (data.no_return_members && data.no_return_members.length > 20) {
-      data.no_return_members = data.no_return_members.slice(0, 20);
-    }
+    // Slim the payload — Claude only needs numbers + small samples, not full arrays
+    const slimData = {
+      week_of:             data.week_of,
+      sales_total:         data.sales_total,
+      autopay_total:       data.autopay_total,
+      active_count:        data.active_count,
+      cancelled_count:     data.cancelled_count,
+      first_visit_count:   data.first_visit_count,
+      first_time_visitors: data.first_time_visitors,
+      no_show_count:       data.no_show_count,
+      avg_founder_visits:  data.avg_founder_visits,
+      health_summary:      data.health_summary,
+      // Small samples only — Claude doesn't need full lists
+      no_return_members:   (data.no_return_members  || []).slice(0, 10),
+      cancelled_members:   (data.cancelled_members  || []).slice(0, 5),
+      new_founder_members: (data.new_founder_members|| []).slice(0, 5),
+      class_data:          (data.class_data         || []).slice(0, 10),
+      founder_classes:     (data.founder_classes    || []).slice(0, 5),
+      instructor_data:     (data.instructor_data    || []).slice(0, 5),
+      peak_times:          (data.peak_times         || []).slice(0, 5),
+      peak_days:           (data.peak_days          || []).slice(0, 7),
+    };
 
     // 1. Call Claude
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -29,7 +47,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-5-20250929',
         max_tokens: 4000,
-        messages: [{ role: 'user', content: buildPrompt(data) }]
+        messages: [{ role: 'user', content: buildPrompt(slimData) }]
       })
     });
 
