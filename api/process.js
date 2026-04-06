@@ -132,7 +132,7 @@ Example: "MRR stability is strong at $16,565 but 6 cancellations this week (7.1%
 
 actions: Exactly 3 actions. Mix of STRATEGIC decisions (CEO makes) and DELEGATION alerts (CEO assigns to team).
 - Strategic example: "Add a second Heated Mat Pilates slot on Thursday 7pm — it has 32% Founder Member attendance, your highest engagement class, and likely has waitlist demand"
-- Delegation example: "Dorian: 9 Founder Members are urgent (21+ days absent) — ${health_summary.red} need calls today, prioritise those with 10+ lifetime visits who are drifting"
+- Delegation example: "Dorian: 9 Founder Members are urgent (21+ days absent) — use health_summary.red count from data, prioritise those with 10+ lifetime visits who are drifting"
 - Do NOT name individual members in actions — that belongs in Dorian's list
 - Mix 1-2 strategic + 1-2 delegation alerts per response
 
