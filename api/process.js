@@ -88,9 +88,23 @@ export default async function handler(req, res) {
     let previous = null;
     try {
       const prevRes  = await fetch(APPS_SCRIPT_URL + '?action=get_previous&week_of=' + encodeURIComponent(data.week_of), { redirect: 'follow' });
-      const prevData = await prevRes.json();
+      const prevText = await prevRes.text();
+      const prevClean = prevText.trim().replace(/^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/, '').replace(/\)\s*;?\s*$/, '');
+      const prevData = JSON.parse(prevClean);
       if (prevData.ok) previous = prevData.data;
     } catch { /* optional */ }
+
+    // Include previous week summary in slim data for Claude context
+    if (previous) {
+      slimData.previous_week = {
+        week_of:       previous.week_of,
+        active_count:  previous.membership?.active_count || previous.active_count || 0,
+        new_this_week: previous.membership?.new_this_week || 0,
+        churned:       previous.membership?.churned_this_week || 0,
+        mrr:           previous.revenue?.mrr || previous.autopay_total || 0,
+        avg_visits:    previous.avg_founder_visits || 0,
+      };
+    }
 
     // Note: saving is handled separately by /api/save after browser merges class data
     return res.status(200).json({ ok: true, current: result, previous });
@@ -156,11 +170,13 @@ ${JSON.stringify(data)}
 
 INTELLIGENCE — CEO LEVEL. Qualitative AND quantitative. Only reference Founder Members.
 
-headline: One punchy sentence with a key number. The most important business reality this week.
-Example: "Net growth of +3 Founder Members brings you to 85 — at this pace you hit 100 in 5 weeks."
+PREVIOUS WEEK CONTEXT (if available, use for trajectory and trend analysis):
+${slimData.previous_week ? JSON.stringify(slimData.previous_week) : 'No previous week data yet'}
 
-insight: 2-3 sentences mixing qualitative observation with quantitative data. Think like a business advisor, not a data analyst. Cover what the numbers mean for the business trajectory.
-Example: "MRR stability is strong at $16,565 but 6 cancellations this week (7.1% churn) is above the healthy 3% threshold — if this rate persists you lose 72 members annually. The bright side: 9 new Founder Members joined this week, your best acquisition week yet, suggesting your referral and marketing efforts are working."
+headline: One punchy sentence with the most important business reality. If previous week data exists, reference the trajectory (e.g. "Up 11 members over 2 weeks" or "Second consecutive week of net negative growth").
+
+insight: 2-3 sentences. ALWAYS reference trajectory if previous week exists — compare this week vs last week on members, MRR, churn, visits. Think like a business advisor seeing the trend, not just this week's snapshot. If this is week 1, focus on current state only.
+Example with history: "You've added 11 net Founder Members over the past 2 weeks ($16,915 → $19,104 MRR) but this week's -1 net growth and 6.3% churn signals the acquisition momentum is stalling. The 5 never-visited cancellations are a systemic onboarding failure — fix this before scaling acquisition."
 
 actions: Exactly 3 actions. Mix of STRATEGIC decisions (CEO makes) and DELEGATION alerts (CEO assigns to team).
 - Strategic example: "Add a second Heated Mat Pilates slot on Thursday 7pm — it has 32% Founder Member attendance, your highest engagement class, and likely has waitlist demand"
