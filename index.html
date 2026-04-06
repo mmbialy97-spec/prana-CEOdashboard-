@@ -852,6 +852,12 @@ function aggregateData() {
     return s;
   }
 
+
+
+  const salesRows    = get('01_sales');
+  const autopayRows  = get('02_autopay');
+  const activeRows   = get('03_members_active');
+
   // Derive week_of from sales CSV dates
   // Simple approach: find the most recent date, get its Monday
   function parseMDY(str) {
@@ -927,10 +933,6 @@ function aggregateData() {
   // Week start = Monday midnight — parse weekOf string manually to avoid timezone issues
   const [wsY, wsM, wsD] = weekOf.split('-').map(Number);
   const weekStart = new Date(wsY, wsM - 1, wsD, 0, 0, 0, 0);
-
-  const salesRows    = get('01_sales');
-  const autopayRows  = get('02_autopay');
-  const activeRows   = get('03_members_active');
   const cancelRows   = get('04_members_cancelled');
   const firstRows    = get('05_first_visit');
   const noReturnRows = get('06_no_return');
