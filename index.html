@@ -377,7 +377,7 @@ function renderDashboard() {
   const tab    = state.tab       || 'overview';
 
   const newFounders   = c.new_founder_members || [];
-  const atRiskCount   = (dorian.critical||[]).length + (dorian.watch||[]).length + (dorian.lost||[]).length;
+  const atRiskCount   = (dorian.critical||[]).length + (dorian.watch||[]).length + (dorian.lost||[]).length + (dorian.never_visited||[]).length;
   const founderVisits = (c.founder_classes||[]).reduce((s,cl)=>s+(cl.founder_visits||0),0);
 
   const wow = (curr, prev, isC) => {
@@ -678,10 +678,11 @@ function renderHealthSummary(c) {
 // ─── Dorian list renderer ─────────────────────────────────────────
 function renderDorianList(dorian, newMembers) {
   const tiers = [
-    { key: 'critical', label: '🔴 Critical', color: 'var(--red)',   bg: 'var(--red-light)',    desc: '14–29 days no visit' },
-    { key: 'watch',    label: '🟡 Watch',    color: 'var(--amber)', bg: 'var(--amber-light)',  desc: '8–13 days no visit' },
-    { key: 'lost',     label: '⚫ Lost',     color: 'var(--ink-2)', bg: 'var(--surface-2)',    desc: '30+ days no visit' },
-    { key: 'win_back', label: '♻ Win-Back', color: 'var(--green)', bg: 'var(--green-light)',  desc: 'Cancelled this week' },
+    { key: 'never_visited', label: '⚠ Never Visited',  color: 'var(--red)',   bg: 'var(--red-light)',   desc: 'Paid but never came in' },
+    { key: 'critical',      label: '🔴 Critical',       color: 'var(--red)',   bg: 'var(--red-light)',   desc: '14–29 days no visit' },
+    { key: 'lost',          label: '⚫ Lost',            color: 'var(--ink-2)', bg: 'var(--surface-2)',   desc: '30+ days no visit' },
+    { key: 'watch',         label: '🟡 Watch',           color: 'var(--amber)', bg: 'var(--amber-light)', desc: '1–2 visits/month' },
+    { key: 'win_back',      label: '♻ Win-Back',        color: 'var(--green)', bg: 'var(--green-light)', desc: 'Cancelled this week' },
   ];
 
   return tiers.map(tier => {
@@ -931,6 +932,56 @@ function aggregateData() {
     frozen: allF.filter(f => f.freeze).length,
   };
 
+  // ── Build Dorian list entirely browser-side from founderMap ──
+  // This ensures ALL at-risk members appear regardless of no_return CSV
+  const dorianCritical = allF
+    .filter(f => f.health === 'red' && !f.freeze && f.days_absent >= 14 && f.days_absent < 30)
+    .sort((a,b) => (b.days_absent||0) - (a.days_absent||0))
+    .map(f => ({
+      name: f.name, email: f.email, phone: f.phone, membership: f.membership,
+      last_visit: f.last_visit, days_absent: f.days_absent||0,
+      lifetime_visits: f.checkins_ytd||0, checkins_30: f.checkins_30||0,
+      member_since: f.member_since, health: 'red',
+    }));
+
+  const dorianWatch = allF
+    .filter(f => f.health === 'amber' && !f.freeze)
+    .sort((a,b) => (b.days_absent||0) - (a.days_absent||0))
+    .map(f => ({
+      name: f.name, email: f.email, phone: f.phone, membership: f.membership,
+      last_visit: f.last_visit, days_absent: f.days_absent||0,
+      lifetime_visits: f.checkins_ytd||0, checkins_30: f.checkins_30||0,
+      member_since: f.member_since, health: 'amber',
+    }));
+
+  const dorianLost = allF
+    .filter(f => f.health === 'red' && !f.freeze && (f.days_absent||0) >= 30)
+    .sort((a,b) => (b.days_absent||0) - (a.days_absent||0))
+    .map(f => ({
+      name: f.name, email: f.email, phone: f.phone, membership: f.membership,
+      last_visit: f.last_visit, days_absent: f.days_absent||0,
+      lifetime_visits: f.checkins_ytd||0, checkins_30: f.checkins_30||0,
+      member_since: f.member_since, health: 'red',
+    }));
+
+  // Members with 0 visits (joined but never came) - also urgent
+  const dorianNeverVisited = allF
+    .filter(f => !f.freeze && (f.checkins_ytd||0) === 0)
+    .map(f => ({
+      name: f.name, email: f.email, phone: f.phone, membership: f.membership,
+      last_visit: f.last_visit, days_absent: f.days_absent||0,
+      lifetime_visits: 0, checkins_30: 0,
+      member_since: f.member_since, health: 'red',
+      never_visited: true,
+    }));
+
+  const browser_dorian = {
+    critical:      dorianCritical,
+    watch:         dorianWatch,
+    lost:          dorianLost,
+    never_visited: dorianNeverVisited,
+  };
+
   // ── No-return Founder Members — enriched ──
   const no_return_members = noReturnRows
     .filter(r => (r['Pricing Option']||'').includes('Founder'))
@@ -1113,6 +1164,7 @@ function aggregateData() {
     instructor_data,
     peak_times,
     peak_days,
+    browser_dorian,
   };
 }
 
@@ -1141,17 +1193,18 @@ async function processFiles() {
     if (!result.ok) throw new Error(result.error || 'Process failed');
 
     // 3. Merge browser-calculated fields into the Claude result
-    // These are not in the Claude response but are needed for the dashboard
     const current = result.current;
-    current.health_summary    = browserData.health_summary;
-    current.avg_founder_visits = browserData.avg_founder_visits;
-    current.founder_classes   = browserData.founder_classes;
-    current.instructor_data   = browserData.instructor_data;
-    current.peak_times        = browserData.peak_times;
-    current.peak_days         = browserData.peak_days;
+    current.health_summary      = browserData.health_summary;
+    current.avg_founder_visits  = browserData.avg_founder_visits;
+    current.founder_classes     = browserData.founder_classes;
+    current.instructor_data     = browserData.instructor_data;
+    current.peak_times          = browserData.peak_times;
+    current.peak_days           = browserData.peak_days;
     current.new_founder_members = browserData.new_founder_members;
     current.first_time_visitors = browserData.first_time_visitors;
-    current.class_data        = browserData.class_data;
+    current.class_data          = browserData.class_data;
+    // Override Claude's dorian list with browser-calculated one — contains ALL at-risk members
+    current.dorian              = browserData.browser_dorian;
 
     // 4. Save enriched result back to Sheets via /api/save
     await fetch('/api/save', {
