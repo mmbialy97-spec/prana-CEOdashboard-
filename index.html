@@ -884,7 +884,7 @@ function aggregateData() {
 
   let weekOf;
   try {
-    // Find the most common week in sales CSV (most rows = the actual report week)
+    // Try sales CSV first
     const weekCounts = {};
     salesRows.forEach(r => {
       const p = parseMDY(r['Sale Date']);
@@ -892,14 +892,32 @@ function aggregateData() {
       const mon = mondayOfDate(p.y, p.m, p.d);
       weekCounts[mon] = (weekCounts[mon] || 0) + 1;
     });
-    // Pick the week with the most sales rows
     let maxCount = 0;
     Object.entries(weekCounts).forEach(([week, count]) => {
       if (count > maxCount) { maxCount = count; weekOf = week; }
     });
-  } catch(e) {}
 
-  // Fallback: Monday of current local week using pure arithmetic
+    // If sales CSV empty or inconclusive, try attendance CSV
+    if (!weekOf || maxCount < 5) {
+      const attendRows = get('09_attendance_analysis');
+      const weekCounts2 = {};
+      attendRows.forEach(r => {
+        const p = parseMDY(r['Date']);
+        if (!p) return;
+        const mon = mondayOfDate(p.y, p.m, p.d);
+        weekCounts2[mon] = (weekCounts2[mon] || 0) + 1;
+      });
+      let maxCount2 = 0;
+      Object.entries(weekCounts2).forEach(([week, count]) => {
+        if (count > maxCount2) { maxCount2 = count; weekOf = week; }
+      });
+    }
+  } catch(e) { console.error('weekOf error:', e); }
+
+  // Log for debugging
+  console.log('[Prana] salesRows count:', salesRows.length, 'weekOf:', weekOf);
+
+  // Fallback: Monday of current local week
   if (!weekOf) {
     const now = new Date();
     const y = now.getFullYear(), m = now.getMonth()+1, d = now.getDate();
