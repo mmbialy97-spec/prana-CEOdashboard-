@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     // If payload is small enough, use GET
     if (encoded.length < 7500) {
       const url = APPS_SCRIPT_URL + '?action=save&week_of=' + encodeURIComponent(week_of) + '&data=' + encoded;
-      await fetch(url);
+      await fetch(url, { redirect: 'follow' });
       return res.status(200).json({ ok: true });
     }
 
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 
     const trimmedEncoded = encodeURIComponent(JSON.stringify(trimmed));
     const url = APPS_SCRIPT_URL + '?action=save&week_of=' + encodeURIComponent(week_of) + '&data=' + trimmedEncoded;
-    await fetch(url);
+    await fetch(url, { redirect: 'follow' });
 
     return res.status(200).json({ ok: true });
 
