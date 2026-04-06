@@ -1448,39 +1448,46 @@ async function init() {
   render();
 
   try {
-    // Step 1: get list of all saved weeks
-    const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
-    const weeks = (weeksData.weeks || []).slice().reverse(); // oldest first
+    // Step 1: Always load latest first — guaranteed to work
+    const latestResult = await fetch('/api/read?action=read_latest').then(r => r.json());
 
-    if (!weeks.length) {
+    if (!latestResult.ok || !latestResult.current) {
       state.view = 'empty';
       render();
       return;
     }
 
-    // Step 2: load each week's full data sequentially into cache
-    const allData = [];
-    for (const w of weeks) {
-      try {
-        const r = await fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(w.week_of)).then(r => r.json());
-        if (r.ok && r.current) allData.push(r.current);
-      } catch {}
-    }
-
-    if (!allData.length) {
-      state.view = 'empty';
-      render();
-      return;
-    }
-
-    // Step 3: cache all weeks, show latest
-    state.allWeeksData = allData;
-    state.weeks        = allData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
-    state.selectedWeek = allData[allData.length - 1].week_of;
-    const latest       = allData[allData.length - 1];
-    const previous     = allData.length > 1 ? allData[allData.length - 2] : null;
-    state.dashData     = { current: latest, previous };
+    // Show latest immediately so mobile users see data right away
+    const latest  = latestResult.current;
+    const prevOne = latestResult.previous || null;
+    state.dashData     = { current: latest, previous: prevOne };
+    state.selectedWeek = latest.week_of;
+    state.allWeeksData = prevOne ? [prevOne, latest] : [latest];
+    state.weeks        = state.allWeeksData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
     state.view         = 'dashboard';
+    render(); // show dashboard immediately
+
+    // Step 2: load remaining weeks in background for Trends + week switcher
+    try {
+      const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
+      const weeks = (weeksData.weeks || []).slice().reverse(); // oldest first
+      const allData = [];
+      for (const w of weeks) {
+        try {
+          const r = await fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(w.week_of)).then(r => r.json());
+          if (r.ok && r.current) allData.push(r.current);
+        } catch {}
+      }
+      if (allData.length) {
+        state.allWeeksData = allData;
+        state.weeks        = allData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
+        // Keep showing same week
+        const current = allData.find(w => w.week_of === state.selectedWeek) || allData[allData.length-1];
+        const idx     = allData.findIndex(w => w.week_of === current.week_of);
+        state.dashData = { current, previous: idx > 0 ? allData[idx-1] : null };
+        render(); // re-render with full data
+      }
+    } catch {} // background load failure is non-fatal
 
   } catch(e) {
     state.view = 'empty';
