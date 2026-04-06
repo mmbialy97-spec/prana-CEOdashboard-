@@ -46,7 +46,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'claude-opus-4-5',
-        max_tokens: 4000,
+        max_tokens: 8000,
         messages: [{ role: 'user', content: buildPrompt(slimData) }]
       })
     });
@@ -60,12 +60,26 @@ export default async function handler(req, res) {
     // Robust JSON extraction
     let text = claude.content[0].text.trim();
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+
+    // Find the JSON object by locating balanced braces
+    let result;
+    const startIdx = text.indexOf('{');
+    if (startIdx === -1) {
       return res.status(500).json({ error: 'No JSON in Claude response', raw: text.substring(0, 500) });
     }
-
-    const result = JSON.parse(jsonMatch[0]);
+    let depth = 0, endIdx = -1;
+    for (let i = startIdx; i < text.length; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') { depth--; if (depth === 0) { endIdx = i; break; } }
+    }
+    if (endIdx === -1) {
+      return res.status(500).json({ error: 'Incomplete JSON in Claude response' });
+    }
+    try {
+      result = JSON.parse(text.substring(startIdx, endIdx + 1));
+    } catch(parseErr) {
+      return res.status(500).json({ error: 'JSON parse failed: ' + parseErr.message, raw: text.substring(0, 500) });
+    }
     result.week_of     = data.week_of;
     result.uploaded_at = new Date().toISOString();
 
@@ -163,5 +177,5 @@ Cancelled members with churn_signal=never_formed_habit = systematic onboarding p
 Use avg_founder_visits in insight — below 2/week is a retention warning signal.
 
 RETURN ONLY THIS JSON, NOTHING ELSE:
-{"revenue":{"total_weekly":0,"mrr":0,"mrr_pct":0,"pack_and_class":0,"revenue_per_member":0},"membership":{"active_count":0,"new_this_week":0,"churned_this_week":0,"net_growth":0,"churn_rate_pct":0,"retention_rate_pct":0,"progress_to_800_pct":0},"attendance":{"avg_fill_rate_pct":0,"total_visits":0,"no_show_rate_pct":0,"top_classes":[{"name":"","visits":0,"fill_rate_pct":0}],"bottom_classes":[{"name":"","visits":0,"fill_rate_pct":0}]},"dorian":{"critical":[{"name":"","email":"","phone":"","membership":"","last_visit":"","days_since_visit":0,"lifetime_visits":0,"member_since":""}],"watch":[],"lost":[],"win_back":[{"name":"","email":"","phone":"","membership":"","cancel_date":""}]},"intelligence":{"headline":"","insight":"","actions":["","",""],"risk":"","bright_spot":""},"warnings":[]}`;
+{"revenue":{"total_weekly":0,"mrr":0,"mrr_pct":0,"pack_and_class":0,"revenue_per_member":0},"membership":{"active_count":0,"new_this_week":0,"churned_this_week":0,"net_growth":0,"churn_rate_pct":0,"retention_rate_pct":0,"progress_to_800_pct":0},"attendance":{"avg_fill_rate_pct":0,"total_visits":0,"no_show_rate_pct":0,"top_classes":[{"name":"","visits":0,"fill_rate_pct":0}],"bottom_classes":[{"name":"","visits":0,"fill_rate_pct":0}]},"dorian":{"critical":[],"watch":[],"lost":[],"win_back":[]},"intelligence":{"headline":"","insight":"","actions":["","",""],"risk":"","bright_spot":""},"warnings":[]}`;
 }
