@@ -1457,20 +1457,26 @@ async function init() {
       return;
     }
 
-    // Show latest immediately so mobile users see data right away
-    const latest  = latestResult.current;
-    const prevOne = latestResult.previous || null;
+    // Build initial cache from latest + previous
+    const allData0 = [];
+    if (latestResult.previous) allData0.push(latestResult.previous);
+    allData0.push(latestResult.current);
+    // Sort chronologically — oldest first
+    allData0.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
+    const latest  = allData0[allData0.length - 1];
+    const prevOne = allData0.length > 1 ? allData0[allData0.length - 2] : null;
+
+    state.allWeeksData = allData0;
+    state.weeks        = allData0.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
     state.dashData     = { current: latest, previous: prevOne };
     state.selectedWeek = latest.week_of;
-    state.allWeeksData = prevOne ? [prevOne, latest] : [latest];
-    state.weeks        = state.allWeeksData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
     state.view         = 'dashboard';
-    render(); // show dashboard immediately
+    render(); // show dashboard immediately with correct latest week
 
-    // Step 2: load remaining weeks in background for Trends + week switcher
+    // Step 2: load ALL weeks in background for Trends + week switcher
     try {
       const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
-      const weeks = (weeksData.weeks || []).slice().reverse(); // oldest first
+      const weeks = (weeksData.weeks || []).sort((a,b) => a.week_of > b.week_of ? 1 : -1); // oldest first
       const allData = [];
       for (const w of weeks) {
         try {
@@ -1479,13 +1485,16 @@ async function init() {
         } catch {}
       }
       if (allData.length) {
+        // Sort chronologically
+        allData.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
         state.allWeeksData = allData;
         state.weeks        = allData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
-        // Keep showing same week
-        const current = allData.find(w => w.week_of === state.selectedWeek) || allData[allData.length-1];
-        const idx     = allData.findIndex(w => w.week_of === current.week_of);
-        state.dashData = { current, previous: idx > 0 ? allData[idx-1] : null };
-        render(); // re-render with full data
+        // Always show the most recent week
+        const trueLatest = allData[allData.length - 1];
+        const trueIdx    = allData.length - 1;
+        state.dashData   = { current: trueLatest, previous: trueIdx > 0 ? allData[trueIdx-1] : null };
+        state.selectedWeek = trueLatest.week_of;
+        render();
       }
     } catch {} // background load failure is non-fatal
 
