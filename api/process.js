@@ -117,7 +117,7 @@ ABOUT PRANA:
 
 IMPORTANT DATA NOTES:
 - sales_total = weekly non-recurring sales (secondary metric)
-- autopay_total = MRR from Founder Members only (full monthly billing cycle)
+- autopay_total = MRR = active_count × $199 (always — ignore any promotional pricing)
 - These are DIFFERENT time periods — do not subtract one from the other
 - revenue_per_member = round(autopay_total / active_count)
 - first_visit_count = new Founder Members who joined this week
