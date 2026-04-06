@@ -852,15 +852,32 @@ function aggregateData() {
     return s;
   }
 
-  // Week start = 7 days ago
-  const weekStart = new Date();
-  weekStart.setDate(weekStart.getDate() - 7);
-  weekStart.setHours(0,0,0,0);
+  // Derive week_of from actual CSV data (sales report dates)
+  // This ensures the week is correct regardless of when the upload happens
+  let weekOf;
+  try {
+    const salesDates = salesRows
+      .map(r => { try { return new Date(r['Sale Date']||''); } catch { return null; } })
+      .filter(d => d && !isNaN(d));
+    if (salesDates.length) {
+      // Find the most recent date in the sales data
+      const maxDate = new Date(Math.max(...salesDates.map(d => d.getTime())));
+      // Get Monday of that week
+      const monday = new Date(maxDate);
+      monday.setDate(maxDate.getDate() - maxDate.getDay() + (maxDate.getDay() === 0 ? -6 : 1));
+      weekOf = monday.toISOString().split('T')[0];
+    }
+  } catch {}
+  // Fallback to Monday of current week if CSV dates unavailable
+  if (!weekOf) {
+    const d = new Date();
+    d.setDate(d.getDate() - d.getDay() + 1);
+    weekOf = d.toISOString().split('T')[0];
+  }
 
-  // Week of label — Monday
-  const d = new Date();
-  d.setDate(d.getDate() - d.getDay() + 1);
-  const weekOf = d.toISOString().split('T')[0];
+  // Week start = Monday of the derived week
+  const weekStart = new Date(weekOf);
+  weekStart.setHours(0,0,0,0);
 
   const salesRows    = get('01_sales');
   const autopayRows  = get('02_autopay');
