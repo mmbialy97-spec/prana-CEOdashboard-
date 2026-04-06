@@ -884,30 +884,26 @@ function aggregateData() {
 
   let weekOf;
   try {
-    // Find the most recent date in sales CSV
-    let maxY = 0, maxM = 0, maxD = 0;
+    // Find the most common week in sales CSV (most rows = the actual report week)
+    const weekCounts = {};
     salesRows.forEach(r => {
       const p = parseMDY(r['Sale Date']);
       if (!p) return;
-      if (p.y > maxY || (p.y === maxY && p.m > maxM) || (p.y === maxY && p.m === maxM && p.d > maxD)) {
-        maxY = p.y; maxM = p.m; maxD = p.d;
-      }
+      const mon = mondayOfDate(p.y, p.m, p.d);
+      weekCounts[mon] = (weekCounts[mon] || 0) + 1;
     });
-    if (maxY > 0) {
-      weekOf = mondayOfDate(maxY, maxM, maxD);
-    }
+    // Pick the week with the most sales rows
+    let maxCount = 0;
+    Object.entries(weekCounts).forEach(([week, count]) => {
+      if (count > maxCount) { maxCount = count; weekOf = week; }
+    });
   } catch(e) {}
 
-  // Fallback: Monday of current local week
+  // Fallback: Monday of current local week using pure arithmetic
   if (!weekOf) {
     const now = new Date();
-    const dow = now.getDay();
-    const daysBack = dow === 0 ? 6 : dow - 1;
-    now.setDate(now.getDate() - daysBack);
-    const yy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    weekOf = yy + '-' + mm + '-' + dd;
+    const y = now.getFullYear(), m = now.getMonth()+1, d = now.getDate();
+    weekOf = mondayOfDate(y, m, d);
   }
 
   // Week start = Monday midnight — parse weekOf string manually to avoid timezone issues
