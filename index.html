@@ -945,13 +945,13 @@ function aggregateData() {
     return s + toNum(r['Item Total'] || r['Total'] || r['Amount'] || 0);
   }, 0);
 
-  // Autopay = MRR (monthly recurring revenue — full month billing)
-  const autopay_total = autopayRows.reduce((s,r) => {
-    return s + toNum(r['Amount'] || 0);
-  }, 0);
+  // MRR = active Founder Members × $199 (always, regardless of promotional pricing)
+  // This is the source of truth — autopay CSV has partial cycles and promo rates
+  const autopay_total = 0; // calculated after active_count is known
 
   // ── Membership ──
   const active_count    = activeRows.length;
+  const mrr             = active_count * 199; // $199/month per Founder Member — always
   const cancelled_count = cancelRows.length;
 
   // New FOUNDER MEMBERS this week = retention_management rows where:
@@ -1216,7 +1216,7 @@ function aggregateData() {
   return {
     week_of: weekOf,
     sales_total:          Math.round(sales_total),
-    autopay_total:        Math.round(autopay_total),
+    autopay_total:        mrr,
     active_count,
     cancelled_count,
     first_visit_count,
@@ -1281,13 +1281,18 @@ async function processFiles() {
       body:    JSON.stringify({ week_of: current.week_of, data: current })
     });
 
-    // 5. Update local state and reload week list
-    state.dashData     = { current, previous: result.previous };
+    // 5. Update cache — add new week, keep existing weeks
+    // Remove this week if it already exists (re-upload)
+    state.allWeeksData = state.allWeeksData.filter(w => w.week_of !== current.week_of);
+    // Add new week in chronological order
+    state.allWeeksData.push(current);
+    state.allWeeksData.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
+    // Update weeks list and selected week
+    state.weeks        = state.allWeeksData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
     state.selectedWeek = current.week_of;
-    state.allWeeksData = []; // reset so Trends tab reloads fresh data
-
-    const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
-    state.weeks = weeksData.weeks || [];
+    const newIdx       = state.allWeeksData.findIndex(w => w.week_of === current.week_of);
+    const newPrevious  = newIdx > 0 ? state.allWeeksData[newIdx - 1] : null;
+    state.dashData     = { current, previous: newPrevious };
 
     state.processing = false;
     state.view = 'dashboard';
@@ -1307,15 +1312,8 @@ function renderTrends() {
   const weeks = state.allWeeksData;
   const n     = weeks.length;
 
-  // If not loaded yet, show button to trigger load (avoids render loop)
-  if (!n && !state.allWeeksLoading) {
-    return '<div style="text-align:center;padding:60px 20px"><div style="font-size:14px;color:var(--ink-2);margin-bottom:16px">Load trend data across all saved weeks.</div><button class="btn-primary" onclick="loadAllWeeks()">Load Trends</button></div>';
-  }
-  if (state.allWeeksLoading) {
-    return '<div style="text-align:center;padding:60px 20px"><div class="processing-spinner" style="margin:0 auto 16px"></div><div style="font-size:14px;color:var(--ink-3)">Loading all weeks…</div></div>';
-  }
   if (n < 2) {
-    return '<div style="text-align:center;padding:60px 20px"><div style="font-size:14px;color:var(--ink-3)">Only 1 week of data so far. Upload a second week to see trends.</div></div>';
+    return '<div style="text-align:center;padding:60px 20px"><div style="font-size:14px;color:var(--ink-3)">Only ' + n + ' week' + (n===1?' of':'s of') + ' data so far. Upload more weeks to see trends.</div></div>';
   }
 
   // Sort oldest → newest
@@ -1423,80 +1421,68 @@ function renderTrends() {
     </div>`;
 }
 
-// ─── Load all weeks data ──────────────────────────────────────────
-async function loadAllWeeks() {
-  if (state.allWeeksLoading) return;
-  state.allWeeksLoading = true;
+// ─── Load all weeks — already in memory from init ────────────────
+function loadAllWeeks() {
+  // Data is already loaded in state.allWeeksData during init
+  // Just re-render to show Trends
+  state.allWeeksLoading = false;
   render();
-
-  try {
-    const weeks = state.weeks;
-    if (!weeks.length) {
-      state.allWeeksData    = [];
-      state.allWeeksLoading = false;
-      render();
-      return;
-    }
-
-    // Load each week sequentially to avoid overwhelming Apps Script
-    const results = [];
-    for (const w of weeks) {
-      try {
-        const r = await fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(w.week_of)).then(r => r.json());
-        if (r.ok && r.current) results.push(r.current);
-      } catch {}
-    }
-
-    state.allWeeksData    = results;
-    state.allWeeksLoading = false;
-    render();
-  } catch {
-    state.allWeeksLoading = false;
-    render();
-  }
 }
 
-// ─── Switch week ──────────────────────────────────────────────────
-async function switchWeek(weekOf) {
-  if (state.selectedWeek === weekOf) return; // already on this week
+// ─── Switch week — uses cache ─────────────────────────────────────
+function switchWeek(weekOf) {
+  if (state.selectedWeek === weekOf) return;
+  const cached = state.allWeeksData.find(w => w.week_of === weekOf);
+  if (!cached) return;
+  const prevIdx = state.allWeeksData.findIndex(w => w.week_of === weekOf) - 1;
+  const previous = prevIdx >= 0 ? state.allWeeksData[prevIdx] : null;
+  state.dashData     = { current: cached, previous };
   state.selectedWeek = weekOf;
-  state.view = 'loading';
-  render();
-  try {
-    const result = await fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(weekOf)).then(r => r.json());
-    if (result.ok && result.current) {
-      state.dashData = result;
-      state.tab = 'overview'; // reset to overview when switching weeks
-      state.view = 'dashboard';
-    } else {
-      state.view = 'dashboard'; // stay on dashboard even if week not found
-    }
-  } catch {
-    state.view = 'dashboard';
-  }
+  state.tab          = 'overview';
   render();
 }
 
-// ─── Init — load latest data on open ─────────────────────────────
+// ─── Init — load ALL weeks into memory on open ───────────────────
 async function init() {
   state.view = 'loading';
   render();
 
   try {
-    const result = await fetch('/api/read?action=read_latest').then(r => r.json());
+    // Step 1: get list of all saved weeks
+    const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
+    const weeks = (weeksData.weeks || []).slice().reverse(); // oldest first
 
-    if (result.ok && result.current) {
-      state.dashData     = result;
-      state.selectedWeek = result.current?.week_of;
-
-      const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
-      state.weeks     = weeksData.weeks || [];
-
-      state.view = 'dashboard';
-    } else {
+    if (!weeks.length) {
       state.view = 'empty';
+      render();
+      return;
     }
-  } catch {
+
+    // Step 2: load each week's full data sequentially into cache
+    const allData = [];
+    for (const w of weeks) {
+      try {
+        const r = await fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(w.week_of)).then(r => r.json());
+        if (r.ok && r.current) allData.push(r.current);
+      } catch {}
+    }
+
+    if (!allData.length) {
+      state.view = 'empty';
+      render();
+      return;
+    }
+
+    // Step 3: cache all weeks, show latest
+    state.allWeeksData = allData;
+    state.weeks        = allData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
+    state.selectedWeek = allData[allData.length - 1].week_of;
+    const latest       = allData[allData.length - 1];
+    const previous     = allData.length > 1 ? allData[allData.length - 2] : null;
+    state.dashData     = { current: latest, previous };
+    state.view         = 'dashboard';
+
+  } catch(e) {
     state.view = 'empty';
   }
 
