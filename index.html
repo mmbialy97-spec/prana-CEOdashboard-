@@ -1256,16 +1256,15 @@ function renderTrends() {
   const weeks = state.allWeeksData;
   const n     = weeks.length;
 
-  // If not loaded yet, trigger load and show spinner
+  // If not loaded yet, show button to trigger load (avoids render loop)
   if (!n && !state.allWeeksLoading) {
-    loadAllWeeks();
-    return '<div style="text-align:center;padding:60px 20px"><div class="processing-spinner" style="margin:0 auto 16px"></div><div style="font-size:14px;color:var(--ink-3)">Loading all weeks…</div></div>';
+    return '<div style="text-align:center;padding:60px 20px"><div style="font-size:14px;color:var(--ink-2);margin-bottom:16px">Load trend data across all saved weeks.</div><button class="btn-primary" onclick="loadAllWeeks()">Load Trends</button></div>';
   }
   if (state.allWeeksLoading) {
     return '<div style="text-align:center;padding:60px 20px"><div class="processing-spinner" style="margin:0 auto 16px"></div><div style="font-size:14px;color:var(--ink-3)">Loading all weeks…</div></div>';
   }
   if (n < 2) {
-    return '<div style="text-align:center;padding:60px 20px"><div style="font-size:14px;color:var(--ink-3)">Upload at least 2 weeks to see trends.</div></div>';
+    return '<div style="text-align:center;padding:60px 20px"><div style="font-size:14px;color:var(--ink-3)">Only 1 week of data so far. Upload a second week to see trends.</div></div>';
   }
 
   // Sort oldest → newest
