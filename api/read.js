@@ -5,39 +5,28 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
-
   const { action, week_of } = req.query || {};
-
   let url = APPS_SCRIPT_URL + '?action=' + (action || 'read_latest');
   if (week_of) url += '&week_of=' + encodeURIComponent(week_of);
-
   try {
-    // Fetch with timeout
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000);
-
     const response = await fetch(url, {
       redirect: 'follow',
       signal: controller.signal,
       headers: { 'Accept': 'application/json, text/plain, */*' }
     });
     clearTimeout(timeout);
-
     const text = await response.text();
     let json = text.trim();
-
-    // Strip JSONP wrapper if present
     const match = json.match(/^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(([\s\S]*)\)\s*;?\s*$/);
     if (match) json = match[1].trim();
-
     let data;
     try {
       data = JSON.parse(json);
     } catch {
       return res.status(200).json({ ok: false, message: 'No data yet' });
     }
-
-    // Normalise
     if (data.current)  data.current  = normalise(data.current);
     if (data.previous) data.previous = normalise(data.previous);
     if (data.weeks) {
@@ -45,9 +34,7 @@ export default async function handler(req, res) {
         .map(w => ({ ...w, week_of: cleanDate(w.week_of) }))
         .sort((a, b) => a.week_of > b.week_of ? 1 : -1);
     }
-
     return res.status(200).json(data);
-
   } catch (err) {
     return res.status(200).json({ ok: false, error: err.message || 'fetch failed' });
   }
@@ -60,9 +47,9 @@ function cleanDate(d) {
   if (s.includes('T')) {
     const dt = new Date(s);
     if (!isNaN(dt)) {
-      return dt.getUTCFullYear() + '-' +
-        String(dt.getUTCMonth()+1).padStart(2,'0') + '-' +
-        String(dt.getUTCDate()).padStart(2,'0');
+      return dt.getFullYear() + '-' +
+        String(dt.getMonth()+1).padStart(2,'0') + '-' +
+        String(dt.getDate()).padStart(2,'0');
     }
   }
   return s;
