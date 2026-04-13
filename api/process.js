@@ -1,4 +1,4 @@
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyyqmSW4DM178V3C9W1H4Isnhh_t8bhwo1V1yLVjpAzvdSeoXaHIhkpcqfHjQjbfe-K/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyXKb1IAu8YGfmP86Z8eL4B3YEvKE5cLh6k1MgGOAM2BQ_FRd9zIHbFco631fIFxq07/exec';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -15,7 +15,6 @@ export default async function handler(req, res) {
     const key = process.env.ANTHROPIC_KEY;
     if (!key) return res.status(500).json({ error: 'ANTHROPIC_KEY not set' });
 
-    // Step 1: fetch previous week FIRST so we can include it in Claude's context
     let previous = null;
     try {
       const prevRes   = await fetch(APPS_SCRIPT_URL + '?action=get_previous&week_of=' + encodeURIComponent(data.week_of), { redirect: 'follow' });
@@ -25,7 +24,6 @@ export default async function handler(req, res) {
       if (prevData.ok) previous = prevData.data;
     } catch { /* optional — first upload has no previous */ }
 
-    // Step 2: build slim payload for Claude (small arrays only)
     const slimData = {
       week_of:             data.week_of,
       sales_total:         data.sales_total,
@@ -47,7 +45,6 @@ export default async function handler(req, res) {
       peak_days:           (data.peak_days          || []).slice(0, 7),
     };
 
-    // Add previous week summary for trajectory-aware insights
     if (previous) {
       slimData.previous_week = {
         week_of:       previous.week_of,
@@ -59,7 +56,6 @@ export default async function handler(req, res) {
       };
     }
 
-    // Step 3: call Claude
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -80,7 +76,6 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'No response from Claude', detail: claude });
     }
 
-    // Robust JSON extraction using brace counting
     let text = claude.content[0].text.trim();
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
