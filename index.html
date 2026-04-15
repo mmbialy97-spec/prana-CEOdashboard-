@@ -724,15 +724,41 @@ function renderDorianList(dorian, newMembers) {
 
 // ─── Dorian CSV download ──────────────────────────────────────────
 function handleDorianDownload() {
-  const dorian = state.dashData?.current?.dorian || {};
+  const current = state.dashData?.current || {};
+  const dorian = current.dorian || {};
+  const newMembers = current.new_founder_members || [];
+
+  // Unified column set so every row has the same fields in the CSV
+  const blank = { segment:'', name:'', membership:'', email:'', phone:'', member_since:'', last_visit:'', days_absent:'', days_since_visit:'', lifetime_visits:'', checkins_30:'', visits_so_far:'', cancel_date:'' };
+
+  const map = (rows, segment) => rows.map(m => ({
+    ...blank,
+    segment,
+    name: m.name || '',
+    membership: m.membership || '',
+    email: m.email || '',
+    phone: m.phone || '',
+    member_since: m.member_since || '',
+    last_visit: m.last_visit || '',
+    days_absent: m.days_absent ?? '',
+    days_since_visit: m.days_since_visit ?? '',
+    lifetime_visits: m.lifetime_visits ?? '',
+    checkins_30: m.checkins_30 ?? '',
+    visits_so_far: m.visits_so_far ?? '',
+    cancel_date: m.cancel_date || '',
+  }));
+
   const all = [
-    ...(dorian.critical||[]).map(m => ({...m, priority:'Critical'})),
-    ...(dorian.watch||[]).map(m => ({...m, priority:'Watch'})),
-    ...(dorian.lost||[]).map(m => ({...m, priority:'Lost'})),
-    ...(dorian.win_back||[]).map(m => ({...m, priority:'Win-Back'})),
+    ...map(newMembers,                  'New Founder Member - Follow Up 48h'),
+    ...map(dorian.never_visited || [],  'Never Visited - Paid but never came in'),
+    ...map(dorian.critical || [],       'Critical - 14-29 days no visit'),
+    ...map(dorian.lost || [],           'Lost - 30+ days no visit'),
+    ...map(dorian.watch || [],          'Watch - 1-2 visits/month'),
+    ...map(dorian.win_back || [],       'Win-Back - Cancelled this week'),
   ];
+
   if (!all.length) return alert('No members in action list.');
-  downloadCSV(all, 'dorian-action-list-' + (state.dashData?.current?.week_of||'') + '.csv');
+  downloadCSV(all, 'dorian-action-list-' + (current.week_of || '') + '.csv');
 }
 
 // ─── Shared header ────────────────────────────────────────────────
