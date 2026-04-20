@@ -531,7 +531,81 @@ function renderDashboard() {
   const allClasses = c.class_data      || [];
   const maxVisits  = allClasses.length ? allClasses[0].visits : 1;
 
+  // ── Classes: actionable insights ──
+  const avgVisitsAllClasses = allClasses.length ? Math.round(allClasses.reduce((s,cl)=>s+cl.visits,0)/allClasses.length) : 0;
+  const underperforming = allClasses.filter(cl => cl.visits < avgVisitsAllClasses * 0.5 && cl.visits > 0);
+  const highCancelClasses = allClasses.filter(cl => cl.late_cancels >= 10).sort((a,b) => b.late_cancels - a.late_cancels);
+  const topInstructor = instrData[0] || null;
+  const bottomInstructor = instrData.length > 1 ? instrData[instrData.length-1] : null;
+  const topTime = peakTimes[0] || null;
+  const secondTime = peakTimes[1] || null;
+  // Gap time = a time slot that exists but has low volume vs top — candidate for new class
+  const gapOpportunity = peakDays.length ? peakDays[peakDays.length-1] : null;
+
+  const insightRows = [];
+
+  // 1. Underperforming classes
+  if (underperforming.length) {
+    insightRows.push({
+      color: 'var(--red)', bg: 'var(--red-light)', icon: '✕',
+      label: 'Consider cutting or rescheduling',
+      text: underperforming.map(cl => '<strong>' + cl.name + '</strong> (' + cl.visits + ' visits' + (cl.late_cancels > 0 ? ', ' + cl.late_cancels + ' late cancels' : '') + ')').join(', ') + ' — less than half the average class attendance of ' + avgVisitsAllClasses + '.',
+    });
+  }
+
+  // 2. Late cancel problem classes
+  if (highCancelClasses.length) {
+    insightRows.push({
+      color: 'var(--amber)', bg: 'var(--amber-light)', icon: '⚠',
+      label: 'Late cancel problem — enforce policy',
+      text: highCancelClasses.slice(0,3).map(cl => '<strong>' + cl.name + '</strong> (' + cl.late_cancels + ' late cancels)').join(', ') + '. High late cancels waste instructor time and block real bookings.',
+    });
+  }
+
+  // 3. Instructor driving vs lagging
+  if (topInstructor && bottomInstructor && topInstructor.name !== bottomInstructor.name) {
+    insightRows.push({
+      color: 'var(--green)', bg: 'var(--green-light)', icon: '★',
+      label: 'Instructor performance gap',
+      text: '<strong>' + topInstructor.name + '</strong> is your top driver at ' + topInstructor.avg_per_class + ' avg check-ins/class across ' + topInstructor.classes_taught + ' classes. <strong>' + bottomInstructor.name + '</strong> is lowest at ' + bottomInstructor.avg_per_class + ' avg/class — review scheduling or mentoring.',
+    });
+  }
+
+  // 4. Best time to add new classes
+  if (topTime && secondTime) {
+    insightRows.push({
+      color: 'var(--green)', bg: 'var(--green-light)', icon: '+',
+      label: 'Best slots to add new classes',
+      text: '<strong>' + topTime.time + '</strong> (' + topTime.visits + ' visits) and <strong>' + secondTime.time + '</strong> (' + secondTime.visits + ' visits) are your highest-demand time slots. Adding capacity here will absorb demand before it drops off.',
+    });
+  }
+
+  // 5. Quietest day = opportunity
+  if (gapOpportunity) {
+    insightRows.push({
+      color: 'var(--amber)', bg: 'var(--amber-light)', icon: '↑',
+      label: 'Underserved day — growth opportunity',
+      text: '<strong>' + gapOpportunity.day + '</strong> has the fewest check-ins (' + gapOpportunity.visits + '). Adding a high-demand class type on this day could lift weekly visits.',
+    });
+  }
+
+  const classInsightsBlock = insightRows.length ? `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)">
+      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Class Decisions This Week</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        ${insightRows.map(row => `
+          <div style="display:flex;gap:14px;align-items:flex-start;padding:14px;background:${row.bg};border-radius:var(--radius);border-left:3px solid ${row.color}">
+            <div style="width:24px;height:24px;border-radius:50%;background:${row.color};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${row.icon}</div>
+            <div>
+              <div style="font-size:10px;font-weight:600;color:${row.color};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">${row.label}</div>
+              <div style="font-size:13px;color:var(--ink);line-height:1.6">${row.text}</div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
   const tabClasses = `
+    ${classInsightsBlock}
     <div class="g4" style="margin-bottom:16px">
       ${pulse('Total Check-ins', (a.total_visits||0).toLocaleString(), 'All visitors this week', 'var(--ink)')}
       ${pulse('Founder Visits', founderVisits, (c.avg_founder_visits||0)+' avg / member', (c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)')}
