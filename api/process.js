@@ -29,8 +29,9 @@ export default async function handler(req, res) {
       sales_total:         data.sales_total,
       autopay_total:       data.autopay_total,
       active_count:        data.active_count,
+      // new_this_week and cancelled_count are both THIS WEEK ONLY figures
+      new_this_week:       data.first_visit_count,
       cancelled_count:     data.cancelled_count,
-      first_visit_count:   data.first_visit_count,
       first_time_visitors: data.first_time_visitors,
       no_show_count:       data.no_show_count,
       avg_founder_visits:  data.avg_founder_visits,
@@ -126,21 +127,24 @@ IMPORTANT DATA NOTES:
 - autopay_total = active_count × $199 (MRR — always use this formula)
 - sales_total = weekly non-recurring sales (secondary metric)
 - active_count = Founder Members only
+- new_this_week = Founder Members who joined THIS WEEK ONLY (not cumulative)
+- cancelled_count = Founder Members who cancelled THIS WEEK ONLY (not cumulative)
 - avg_founder_visits = average visits per Founder Member this week. Target is 3+/week.
-- health_summary = {green: 3+visits/month, amber: 1-2/month, red: 0 visits or 21+ days absent}
+- health_summary = {green: 3+visits/month, amber: 1-2 visits/month, red: 0 visits or 21+ days absent}
 
 CALCULATION RULES:
 - mrr = autopay_total (= active_count × $199)
 - pack_and_class = sales_total
 - mrr_pct = round(mrr / (mrr + sales_total) * 100)
 - revenue_per_member = round(mrr / active_count)
-- net_growth = first_visit_count minus cancelled_count
+- net_growth = new_this_week minus cancelled_count (BOTH are this-week-only figures)
+- churned_this_week = cancelled_count (this week only)
 - churn_rate_pct = round(cancelled_count / active_count * 100, 1)
 - progress_to_800_pct = round(active_count / 800 * 100)
 - Today is ${today}
-- critical = no_return where days_since_visit between 14 and 29, MAX 10
-- watch = no_return where days_since_visit between 8 and 13, MAX 10
-- lost = no_return where days_since_visit 30+, MAX 10
+- critical = members with 0 visits in past 14-29 days, MAX 10
+- watch = members with 1-2 visits/month (amber health), MAX 10
+- lost = members with 0 visits for 30+ days, MAX 10
 - win_back = cancelled_members list as-is
 - total_visits = sum of all visits in class_data
 - no_show_rate_pct = round(no_show_count / total_visits * 100)
