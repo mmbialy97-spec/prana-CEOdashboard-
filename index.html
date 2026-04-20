@@ -97,8 +97,6 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .dash-actions{margin-left:auto;display:flex;gap:10px;align-items:center}
 .week-select{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--ink-2);background:var(--surface);font-family:var(--body);cursor:pointer}
 
-/* Chat removed */
-
 /* ── Responsive grid helpers ── */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
@@ -166,15 +164,15 @@ const GROUPS = ['Revenue','Membership','Attendance'];
 
 // ─── State ────────────────────────────────────────────────────────
 let state = {
-  view: 'loading',      // loading | empty | upload | dashboard
-  tab: 'overview',      // overview | members | revenue | classes
+  view: 'loading',
+  tab: 'overview',
   fileMap: {},
   processing: false,
   dragging: false,
   dashData: null,
   weeks: [],
   selectedWeek: null,
-  allWeeksData: [],     // full data for all weeks (loaded when Trends tab opened)
+  allWeeksData: [],
   allWeeksLoading: false,
   error: null,
 };
@@ -415,7 +413,6 @@ function renderDashboard() {
 
   // ─── TAB: OVERVIEW ──────────────────────────────────────────────
   const tabOverview = `
-    <!-- 6 Pulse metrics -->
     <div class="g3" style="margin-bottom:20px">
       ${pulse('MRR', fmtC(r.mrr), 'Monthly recurring revenue', 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
       ${pulse('Founder Members', m.active_count||'—', (800-(m.active_count||0))+' to full capacity', 'var(--ink)', wow(m.active_count, p?.membership?.active_count, false))}
@@ -728,7 +725,6 @@ function handleDorianDownload() {
   const dorian = current.dorian || {};
   const newMembers = current.new_founder_members || [];
 
-  // Unified column set so every row has the same fields in the CSV
   const blank = { segment:'', name:'', membership:'', email:'', phone:'', member_since:'', last_visit:'', days_absent:'', days_since_visit:'', lifetime_visits:'', checkins_30:'', visits_so_far:'', cancel_date:'' };
 
   const map = (rows, segment) => rows.map(m => ({
@@ -775,8 +771,6 @@ function renderHeader() {
 
 // ─── Events ───────────────────────────────────────────────────────
 function bindEvents() {
-  // Since render() replaces innerHTML each time, all elements are fresh —
-  // no duplicate listener risk. Just wire up what exists.
   const processBtn = document.getElementById('processBtn');
   if (processBtn) processBtn.onclick = processFiles;
 
@@ -792,7 +786,7 @@ function bindEvents() {
     dropZone.ondragover  = handleDragOver;
     dropZone.ondragleave = handleDragLeave;
     dropZone.ondrop      = handleDrop;
-}
+  }
 }
 
 function showUpload() {
@@ -860,14 +854,12 @@ function aggregateData() {
   const fm  = state.fileMap;
   const get = key => fm[key]?.rows ?? [];
 
-  // Strip commas and $ from numbers
   function toNum(v) {
     if (!v) return 0;
     const n = parseFloat(String(v).replace(/[$,]/g,''));
     return isNaN(n) ? 0 : n;
   }
 
-  // Fix Mindbody "Last, First" name format → "First Last"
   function fixName(raw) {
     if (!raw) return '';
     const s = String(raw).replace(/"/g,'').trim();
@@ -878,14 +870,10 @@ function aggregateData() {
     return s;
   }
 
-
-
   const salesRows    = get('01_sales');
   const autopayRows  = get('02_autopay');
   const activeRows   = get('03_members_active');
 
-  // Derive week_of from sales CSV dates
-  // Simple approach: find the most recent date, get its Monday
   function parseMDY(str) {
     if (!str) return null;
     const p = str.trim().split('/');
@@ -896,14 +884,11 @@ function aggregateData() {
   }
 
   function mondayOfDate(y, m, d) {
-    // Pure arithmetic day-of-week (Sakamoto's algorithm) — no Date object, no timezone issues
     const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
     let yr = y;
     if (m < 3) yr--;
     const dow = (yr + Math.floor(yr/4) - Math.floor(yr/100) + Math.floor(yr/400) + t[m-1] + d) % 7;
-    // dow: 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat
     const daysBack = dow === 0 ? 6 : dow - 1;
-    // Subtract daysBack from date without using Date object
     let rd = d - daysBack, rm = m, ry = y;
     if (rd < 1) {
       rm--;
@@ -916,7 +901,6 @@ function aggregateData() {
 
   let weekOf;
   try {
-    // Try sales CSV first
     const weekCounts = {};
     salesRows.forEach(r => {
       const p = parseMDY(r['Sale Date']);
@@ -929,7 +913,6 @@ function aggregateData() {
       if (count > maxCount) { maxCount = count; weekOf = week; }
     });
 
-    // If sales CSV empty or inconclusive, try attendance CSV
     if (!weekOf || maxCount < 5) {
       const attendRows = get('09_attendance_analysis');
       const weekCounts2 = {};
@@ -946,43 +929,34 @@ function aggregateData() {
     }
   } catch(e) { console.error('weekOf error:', e); }
 
-  // Log for debugging
   console.log('[Prana] salesRows count:', salesRows.length, 'weekOf:', weekOf);
 
-  // Fallback: Monday of current local week
   if (!weekOf) {
     const now = new Date();
     const y = now.getFullYear(), m = now.getMonth()+1, d = now.getDate();
     weekOf = mondayOfDate(y, m, d);
   }
 
-  // Week start = Monday midnight — parse weekOf string manually to avoid timezone issues
   const [wsY, wsM, wsD] = weekOf.split('-').map(Number);
   const weekStart = new Date(wsY, wsM - 1, wsD, 0, 0, 0, 0);
+  // Week end = Sunday 23:59:59 (6 days after Monday)
+  const weekEnd = new Date(wsY, wsM - 1, wsD + 6, 23, 59, 59, 999);
+
   const cancelRows   = get('04_members_cancelled');
   const firstRows    = get('05_first_visit');
   const noReturnRows = get('06_no_return');
   const retMgmtRows  = get('07_retention_management');
-  // 12_class_visit is all-time data — we use 09_attendance_analysis for this week's class data instead
 
   // ── Revenue ──
-  // Sales total = sum of Item Total from sales report
   const sales_total = salesRows.reduce((s,r) => {
     return s + toNum(r['Item Total'] || r['Total'] || r['Amount'] || 0);
   }, 0);
 
-  // MRR = active Founder Members × $199 (always, regardless of promotional pricing)
-  // This is the source of truth — autopay CSV has partial cycles and promo rates
-  const autopay_total = 0; // calculated after active_count is known
-
   // ── Membership ──
-  const active_count    = activeRows.length;
-  const mrr             = active_count * 199; // $199/month per Founder Member — always
-  const cancelled_count = cancelRows.length;
+  const active_count = activeRows.length;
+  const mrr          = active_count * 199;
 
-  // New FOUNDER MEMBERS this week = retention_management rows where:
-  // 1. Membership Type contains "Founder"
-  // 2. Member Since date is within past 7 days
+  // New Founder Members this week
   const first_visit_count = retMgmtRows.filter(r => {
     const ms   = r['Member Since'] || '';
     const type = (r['Membership Type'] || '').toLowerCase();
@@ -990,10 +964,22 @@ function aggregateData() {
     try { return new Date(ms) >= weekStart; } catch { return false; }
   }).length;
 
-  // First time visitors this week (ClassPass, drop-ins — informational only)
+  // ── FIXED: Cancelled THIS WEEK ONLY ──
+  // Cancellation Date format: "Terminated from MM/DD/YYYY"
+  const cancelled_count = cancelRows.filter(r => {
+    const raw = (r['Cancellation Date'] || '').trim();
+    // Strip "Terminated from " prefix if present
+    const dateStr = raw.replace(/^Terminated from\s*/i, '').trim();
+    if (!dateStr) return false;
+    try {
+      const d = new Date(dateStr);
+      return !isNaN(d) && d >= weekStart && d <= weekEnd;
+    } catch { return false; }
+  }).length;
+
   const first_time_visitors = firstRows.length;
 
-  // ── Build Founder Member health map from retention_management ──
+  // ── Build Founder Member health map ──
   const founderMap = {};
   retMgmtRows.forEach(r => {
     if (!(r['Membership Type']||'').includes('Founder')) return;
@@ -1004,7 +990,8 @@ function aggregateData() {
     const lv   = r['Last'] || '';
     const freeze = (r['Freeze']||'') === 'Yes';
     let daysAbsent = null;
-    try { const d = new Date(lv); if (!isNaN(d)) daysAbsent = Math.floor((new Date()-d)/86400000); } catch {}
+    // Use weekEnd as reference date so health reflects end-of-week state, not today
+    try { const d = new Date(lv); if (!isNaN(d)) daysAbsent = Math.floor((weekEnd - d) / 86400000); } catch {}
     let health = 'green';
     if (freeze) health = 'frozen';
     else if (c30 === 0 || daysAbsent >= 21) health = 'red';
@@ -1017,7 +1004,7 @@ function aggregateData() {
     };
   });
 
-  // ── Founder Member health summary ──
+  // ── Health summary ──
   const allF = Object.values(founderMap);
   const health_summary = {
     green:  allF.filter(f => f.health==='green').length,
@@ -1026,8 +1013,7 @@ function aggregateData() {
     frozen: allF.filter(f => f.freeze).length,
   };
 
-  // ── Build Dorian list entirely browser-side from founderMap ──
-  // This ensures ALL at-risk members appear regardless of no_return CSV
+  // ── Dorian list ──
   const dorianCritical = allF
     .filter(f => f.health === 'red' && !f.freeze && f.days_absent >= 14 && f.days_absent < 30)
     .sort((a,b) => (b.days_absent||0) - (a.days_absent||0))
@@ -1058,7 +1044,6 @@ function aggregateData() {
       member_since: f.member_since, health: 'red',
     }));
 
-  // Members with 0 visits (joined but never came) - also urgent
   const dorianNeverVisited = allF
     .filter(f => !f.freeze && (f.checkins_ytd||0) === 0)
     .map(f => ({
@@ -1076,7 +1061,7 @@ function aggregateData() {
     never_visited: dorianNeverVisited,
   };
 
-  // ── No-return Founder Members — enriched ──
+  // ── No-return Founder Members ──
   const no_return_members = noReturnRows
     .filter(r => (r['Pricing Option']||'').includes('Founder'))
     .slice(0, 20)
@@ -1096,7 +1081,7 @@ function aggregateData() {
       };
     });
 
-  // ── New Founder Members this week — need first visit follow-up ──
+  // ── New Founder Members this week ──
   const new_founder_members = retMgmtRows
     .filter(r => (r['Membership Type']||'').includes('Founder'))
     .filter(r => { try { return new Date(r['Member Since']) >= weekStart; } catch { return false; } })
@@ -1108,17 +1093,19 @@ function aggregateData() {
       visits_so_far: parseInt(r['Check Ins YTD']||'0')||0,
     }));
 
-  // ── Cancelled members with full visit history ──
+  // ── Cancelled members ──
   const cancelled_members = cancelRows
     .filter(r => r['Name'] && r['Name'] !== 'Total: 5')
     .map(r => {
       const name   = (r['Name']||'').trim();
       const enrich = founderMap[name.toLowerCase()] || {};
       const cYTD   = enrich.checkins_ytd||0;
+      // Strip "Terminated from " prefix for display
+      const cancelDateRaw = (r['Cancellation Date']||'').replace(/^Terminated from\s*/i,'').trim();
       return {
         name, email: (r['Email Address ']||r['Email']||'').trim(),
         phone: (r['Phone Number']||r['Phone']||'').trim(),
-        cancel_date: (r['Cancellation Date']||'').replace('Terminated from ','').trim(),
+        cancel_date: cancelDateRaw,
         lifetime_visits: cYTD, member_since: enrich.member_since||'',
         churn_signal: cYTD<=3?'never_formed_habit':cYTD<=10?'early_churn':'long_term_churn',
       };
@@ -1150,21 +1137,18 @@ function aggregateData() {
     const startTime  = (r['Start time']||'').trim();
     const dateStr    = (r['Date']||'').trim();
 
-    // Fix staff name "Last, First" → "First Last"
     let instructor = rawStaff;
     if (rawStaff.includes(',')) {
       const parts = rawStaff.split(',');
       instructor = (parts[1]||'').trim() + ' ' + (parts[0]||'').trim();
     }
 
-    // Day of week
     let dayName = '';
     try {
       const d = new Date(dateStr);
       if (!isNaN(d)) dayName = days[d.getDay()];
     } catch {}
 
-    // Class map
     if (!classMap[className]) classMap[className] = {
       name: className, visits:0, founder_visits:0, late_cancels:0,
       instructors:{}, times:{}, days:{}
@@ -1177,12 +1161,10 @@ function aggregateData() {
       if (startTime)  classMap[className].times[startTime]        = (classMap[className].times[startTime]||0)+1;
       if (dayName)    classMap[className].days[dayName]            = (classMap[className].days[dayName]||0)+1;
 
-      // Global instructor map
       if (!instrMap[instructor]) instrMap[instructor] = {name:instructor, visits:0, classes_taught:new Set()};
       instrMap[instructor].visits += 1;
       instrMap[instructor].classes_taught.add(className+dateStr+startTime);
 
-      // Global time and day maps
       if (startTime) timeMap[startTime] = (timeMap[startTime]||0)+1;
       if (dayName)   dayMap[dayName]    = (dayMap[dayName]||0)+1;
 
@@ -1206,7 +1188,6 @@ function aggregateData() {
     }))
     .sort((a,b) => b.visits - a.visits);
 
-  // Instructor leaderboard
   const instructor_data = Object.values(instrMap)
     .map(i => ({
       name:          i.name,
@@ -1217,22 +1198,18 @@ function aggregateData() {
     .sort((a,b) => b.visits - a.visits)
     .slice(0, 10);
 
-  // Peak times and days
   const peak_times = Object.entries(timeMap).sort((a,b)=>b[1]-a[1]).slice(0,5)
     .map(([time,visits]) => ({time, visits}));
   const peak_days  = Object.entries(dayMap).sort((a,b)=>b[1]-a[1])
     .map(([day,visits]) => ({day, visits}));
 
-  // Average visits per Founder Member
   const avg_founder_visits = founderIds.size > 0
     ? Math.round(founder_visits_total/founderIds.size*10)/10 : 0;
 
-  // Founder classes sorted by engagement
   const founder_classes = [...class_data]
     .filter(c => c.founder_visits > 0)
     .sort((a,b) => b.founder_pct - a.founder_pct);
 
-  // ── No-show & late cancel count ──
   const noRevRows     = get('10_attendance_no_revenue');
   const no_show_count = noRevRows.filter(r =>
     (r['Status']||'').toLowerCase().includes('no show') ||
@@ -1273,10 +1250,8 @@ async function processFiles() {
   render();
 
   try {
-    // 1. Aggregate all browser-side data (class breakdown, health, instructors etc.)
     const browserData = aggregateData();
 
-    // 2. Send to Vercel — Claude analyses, saves to Sheets, returns result
     const res = await fetch('/api/process', {
       method:  'POST',
       headers: {'Content-Type':'application/json'},
@@ -1286,7 +1261,6 @@ async function processFiles() {
 
     if (!result.ok) throw new Error(result.error || 'Process failed');
 
-    // 3. Merge browser-calculated fields into the Claude result
     const current = result.current;
     current.health_summary      = browserData.health_summary;
     current.avg_founder_visits  = browserData.avg_founder_visits;
@@ -1297,23 +1271,17 @@ async function processFiles() {
     current.new_founder_members = browserData.new_founder_members;
     current.first_time_visitors = browserData.first_time_visitors;
     current.class_data          = browserData.class_data;
-    // Override Claude's dorian list with browser-calculated one — contains ALL at-risk members
     current.dorian              = browserData.browser_dorian;
 
-    // 4. Save enriched result back to Sheets via /api/save
     await fetch('/api/save', {
       method:  'POST',
       headers: {'Content-Type':'application/json'},
       body:    JSON.stringify({ week_of: current.week_of, data: current })
     });
 
-    // 5. Update cache — add new week, keep existing weeks
-    // Remove this week if it already exists (re-upload)
     state.allWeeksData = state.allWeeksData.filter(w => w.week_of !== current.week_of);
-    // Add new week in chronological order
     state.allWeeksData.push(current);
     state.allWeeksData.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
-    // Update weeks list and selected week
     state.weeks        = state.allWeeksData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
     state.selectedWeek = current.week_of;
     const newIdx       = state.allWeeksData.findIndex(w => w.week_of === current.week_of);
@@ -1342,12 +1310,10 @@ function renderTrends() {
     return '<div style="text-align:center;padding:60px 20px"><div style="font-size:14px;color:var(--ink-3)">Only ' + n + ' week' + (n===1?' of':'s of') + ' data so far. Upload more weeks to see trends.</div></div>';
   }
 
-  // Sort oldest → newest
   const sorted = [...weeks].sort((a,b) => new Date(a.week_of) - new Date(b.week_of));
   const first  = sorted[0];
   const latest = sorted[n-1];
 
-  // Aggregations
   const totalNewMembers   = sorted.reduce((s,w) => s + (w.membership?.new_this_week||0), 0);
   const totalChurned      = sorted.reduce((s,w) => s + (w.membership?.churned_this_week||0), 0);
   const totalNetGrowth    = sorted.reduce((s,w) => s + (w.membership?.net_growth||0), 0);
@@ -1363,7 +1329,6 @@ function renderTrends() {
   const latestMembers     = latest.membership?.active_count || 0;
   const memberGrowth      = latestMembers - firstMembers;
 
-  // Best and worst weeks
   const bestMRRWeek     = sorted.reduce((best,w) => (w.revenue?.mrr||0) > (best.revenue?.mrr||0) ? w : best, sorted[0]);
   const worstChurnWeek  = sorted.reduce((worst,w) => (w.membership?.churned_this_week||0) > (worst.membership?.churned_this_week||0) ? w : worst, sorted[0]);
   const bestGrowthWeek  = sorted.reduce((best,w) => (w.membership?.new_this_week||0) > (best.membership?.new_this_week||0) ? w : best, sorted[0]);
@@ -1380,7 +1345,6 @@ function renderTrends() {
   return `
     <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">${n} weeks of data · ${first.week_of} → ${latest.week_of}</div>
 
-    <!-- Member growth -->
     <div style="font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.08em">Membership</div>
     <div class="g3" style="margin-bottom:20px">
       ${trendCard('Members Now', latestMembers, 'Started at '+firstMembers+' · '+wowArrow(memberGrowth)+' '+Math.abs(memberGrowth)+' total growth', memberGrowth >= 0 ? 'var(--green)' : 'var(--red)')}
@@ -1388,7 +1352,6 @@ function renderTrends() {
       ${trendCard('Total Churned', totalChurned, avgChurnPerWeek+' avg per week · '+Math.round(avgChurnRate*10)/10+'% avg churn rate', totalChurned > 0 ? 'var(--red)' : 'var(--ink)')}
     </div>
 
-    <!-- Revenue -->
     <div style="font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.08em">Revenue</div>
     <div class="g3" style="margin-bottom:20px">
       ${trendCard('MRR Now', fmtC(latestMRR), 'Started at '+fmtC(firstMRR)+' · '+wowArrow(mrrGrowth)+fmtC(Math.abs(mrrGrowth))+' growth', 'var(--green)')}
@@ -1396,7 +1359,6 @@ function renderTrends() {
       ${trendCard('Revenue / Member', fmtC(latest.revenue?.revenue_per_member||0), 'Latest week · started at '+fmtC(first.revenue?.revenue_per_member||0), 'var(--ink)')}
     </div>
 
-    <!-- Attendance -->
     <div style="font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.08em">Attendance</div>
     <div class="g3" style="margin-bottom:20px">
       ${trendCard('Total Check-ins', totalVisits.toLocaleString(), 'Across all '+n+' weeks', 'var(--ink)')}
@@ -1404,7 +1366,6 @@ function renderTrends() {
       ${trendCard('Net Growth Total', (totalNetGrowth>=0?'+':'')+totalNetGrowth, 'Members gained minus lost over '+n+' weeks', totalNetGrowth>=0?'var(--green)':'var(--red)')}
     </div>
 
-    <!-- Notable weeks -->
     <div style="font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.08em">Notable Weeks</div>
     <div class="g3" style="margin-bottom:20px">
       ${trendCard('Best MRR Week', fmtC(bestMRRWeek.revenue?.mrr||0), bestMRRWeek.week_of, 'var(--green)')}
@@ -1412,7 +1373,6 @@ function renderTrends() {
       ${trendCard('Highest Churn Week', (worstChurnWeek.membership?.churned_this_week||0)+' churned', worstChurnWeek.week_of, 'var(--red)')}
     </div>
 
-    <!-- Week by week table -->
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
       <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Week by Week</div>
       <div style="overflow-x:auto">
@@ -1447,15 +1407,7 @@ function renderTrends() {
     </div>`;
 }
 
-// ─── Load all weeks — already in memory from init ────────────────
-function loadAllWeeks() {
-  // Data is already loaded in state.allWeeksData during init
-  // Just re-render to show Trends
-  state.allWeeksLoading = false;
-  render();
-}
-
-// ─── Switch week — uses cache ─────────────────────────────────────
+// ─── Switch week ─────────────────────────────────────────────────
 function switchWeek(weekOf) {
   if (state.selectedWeek === weekOf) return;
   const cached = state.allWeeksData.find(w => w.week_of === weekOf);
@@ -1468,13 +1420,12 @@ function switchWeek(weekOf) {
   render();
 }
 
-// ─── Init — load ALL weeks into memory on open ───────────────────
+// ─── Init ─────────────────────────────────────────────────────────
 async function init() {
   state.view = 'loading';
   render();
 
   try {
-    // Step 1: Always load latest first — guaranteed to work
     const latestResult = await fetch('/api/read?action=read_latest').then(r => r.json());
 
     if (!latestResult.ok || !latestResult.current) {
@@ -1483,11 +1434,9 @@ async function init() {
       return;
     }
 
-    // Build initial cache from latest + previous
     const allData0 = [];
     if (latestResult.previous) allData0.push(latestResult.previous);
     allData0.push(latestResult.current);
-    // Sort chronologically — oldest first
     allData0.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
     const latest  = allData0[allData0.length - 1];
     const prevOne = allData0.length > 1 ? allData0[allData0.length - 2] : null;
@@ -1497,12 +1446,11 @@ async function init() {
     state.dashData     = { current: latest, previous: prevOne };
     state.selectedWeek = latest.week_of;
     state.view         = 'dashboard';
-    render(); // show dashboard immediately with correct latest week
+    render();
 
-    // Step 2: load ALL weeks in background for Trends + week switcher
     try {
       const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
-      const weeks = (weeksData.weeks || []).sort((a,b) => a.week_of > b.week_of ? 1 : -1); // oldest first
+      const weeks = (weeksData.weeks || []).sort((a,b) => a.week_of > b.week_of ? 1 : -1);
       const allData = [];
       for (const w of weeks) {
         try {
@@ -1511,18 +1459,16 @@ async function init() {
         } catch {}
       }
       if (allData.length) {
-        // Sort chronologically
         allData.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
         state.allWeeksData = allData;
         state.weeks        = allData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
-        // Always show the most recent week
         const trueLatest = allData[allData.length - 1];
         const trueIdx    = allData.length - 1;
         state.dashData   = { current: trueLatest, previous: trueIdx > 0 ? allData[trueIdx-1] : null };
         state.selectedWeek = trueLatest.week_of;
         render();
       }
-    } catch {} // background load failure is non-fatal
+    } catch {}
 
   } catch(e) {
     state.view = 'empty';
