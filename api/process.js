@@ -1,1641 +1,196 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Prana Wellness — CEO Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#F7F5F0;--surface:#FFFFFF;--border:#E2DDD8;
-  --green:#2D6A4F;--green-light:#EAF2EC;
-  --ink:#1A1A18;--ink-2:#5A5A56;--ink-3:#9A9A94;
-  --amber:#C17F24;--amber-light:#FDF3E3;
-  --red:#B94040;--red-light:#FBEAEA;
-  --surface-2:#F0EDE8;
-  --body:'DM Sans',system-ui,sans-serif;
-  --display:'DM Serif Display',Georgia,serif;
-  --mono:'DM Mono',monospace;
-  --radius:8px;--radius-lg:14px;
-  --shadow:0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04);
-}
-html{-webkit-font-smoothing:antialiased}
-body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:100vh}
-@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-@keyframes spin{to{transform:rotate(360deg)}}
-.fu{animation:fadeUp 0.4s ease both}
-.fu2{animation:fadeUp 0.4s 0.06s ease both}
-.fu3{animation:fadeUp 0.4s 0.12s ease both}
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyXKb1IAu8YGfmP86Z8eL4B3YEvKE5cLh6k1MgGOAM2BQ_FRd9zIHbFco631fIFxq07/exec';
 
-/* ── Layout ── */
-.page{max-width:660px;margin:0 auto;padding:32px 16px 80px}
-.header{display:flex;align-items:center;gap:14px;margin-bottom:40px}
-.logo{width:44px;height:44px;border-radius:10px;background:var(--green);color:#fff;font-family:var(--display);font-size:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.brand-name{font-family:var(--display);font-size:20px;color:var(--ink);line-height:1.2}
-.brand-sub{font-size:11px;color:var(--ink-3);font-weight:500;letter-spacing:0.1em;text-transform:uppercase}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;margin-bottom:16px;box-shadow:var(--shadow)}
-.card-label{font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px}
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-/* ── Empty state ── */
-.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:64px 32px;text-align:center}
-.empty-icon{width:56px;height:56px;border-radius:14px;background:var(--green-light);display:flex;align-items:center;justify-content:center;margin-bottom:4px}
-.empty-title{font-family:var(--display);font-size:22px;color:var(--ink)}
-.empty-sub{font-size:14px;color:var(--ink-3);max-width:300px;line-height:1.6}
-.btn-primary{padding:12px 24px;background:var(--green);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--body);margin-top:8px;transition:opacity 0.15s}
-.btn-primary:hover{opacity:0.88}
-.btn-secondary{padding:9px 18px;background:transparent;color:var(--ink-2);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;font-family:var(--body);transition:border-color 0.15s}
-.btn-secondary:hover{border-color:var(--ink-3)}
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-/* ── Drop zone ── */
-.drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:36px 24px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg)}
-.drop-zone.active{border-color:var(--green);background:var(--green-light)}
-.drop-zone.done{border-color:var(--green);border-style:solid;background:var(--green-light);cursor:default}
-.drop-icon{color:var(--ink-3);margin-bottom:8px}
-.drop-title{font-weight:500;font-size:15px;color:var(--ink);margin-bottom:4px}
-.drop-sub{font-size:13px;color:var(--ink-3)}
-.done-icon{width:48px;height:48px;border-radius:50%;background:var(--green);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 8px}
-.done-title{font-weight:600;font-size:16px;color:var(--green)}
-.done-sub{font-size:13px;color:var(--ink-3)}
-
-/* ── Progress ── */
-.progress-wrap{display:flex;align-items:center;gap:12px;margin-top:16px}
-.progress-track{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
-.progress-fill{height:100%;background:var(--green);border-radius:2px;transition:width 0.4s ease}
-.progress-label{font-family:var(--mono);font-size:12px;color:var(--ink-3);white-space:nowrap}
-
-/* ── Spinner ── */
-.spinner{width:20px;height:20px;border:2.5px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0}
-
-/* ── File rows ── */
-.file-grid{display:flex;flex-direction:column;gap:3px}
-.file-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;transition:background 0.15s}
-.file-row.ok{background:var(--green-light)}
-.file-row.error{background:var(--red-light)}
-.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
-.file-name{font-weight:500;font-size:13px;color:var(--ink);flex:1}
-.file-key{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
-.file-rows{font-family:var(--mono);font-size:11px;color:var(--green);margin-left:4px}
-.file-err{font-family:var(--mono);font-size:11px;color:var(--red)}
-
-/* ── Warning box ── */
-.warn-box{background:var(--amber-light);border:1px solid var(--amber);border-radius:var(--radius);padding:14px 18px;margin-bottom:14px}
-.warn-title{font-weight:600;font-size:13px;color:var(--amber);margin-bottom:6px}
-.warn-file{font-family:var(--mono);font-size:12px;color:var(--ink-2);margin-bottom:2px}
-.warn-hint{font-size:12px;color:var(--ink-3);margin-top:6px}
-
-/* ── Processing overlay ── */
-.processing{display:flex;flex-direction:column;align-items:center;gap:14px;padding:48px 24px;text-align:center}
-.processing-title{font-family:var(--display);font-size:20px;color:var(--ink)}
-.processing-sub{font-size:13px;color:var(--ink-3)}
-.processing-spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 0.9s linear infinite}
-
-/* ── Dashboard placeholder ── */
-.dash-header{display:flex;align-items:center;gap:14px;margin-bottom:40px;padding-bottom:24px;border-bottom:1px solid var(--border)}
-.dash-actions{margin-left:auto;display:flex;gap:10px;align-items:center}
-.week-select{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--ink-2);background:var(--surface);font-family:var(--body);cursor:pointer}
-
-/* ── Responsive grid helpers ── */
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-
-/* ── Mobile ── */
-@media(max-width:700px){
-  .g2,.g3,.g4{grid-template-columns:1fr 1fr}
-  .g4-to-1{grid-template-columns:1fr}
-}
-@media(max-width:480px){
-  .g2{grid-template-columns:1fr 1fr}
-  .g3,.g4{grid-template-columns:1fr 1fr}
-  .dash-header-actions{display:none}
-  .chat-chip{font-size:11px;padding:5px 10px}
-}
-
-/* ── Dashboard header mobile ── */
-.dash-header-wrap{display:flex;align-items:center;gap:12px;margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
-.dash-header-left{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
-.dash-header-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
-@media(max-width:600px){
-  .dash-header-wrap{padding-bottom:14px;margin-bottom:18px}
-  .dash-header-actions .btn-secondary{display:none}
-}
-
-/* ── Tab nav mobile ── */
-.tab-nav{display:flex;gap:2px;background:var(--surface-2);border-radius:10px;padding:4px;margin-bottom:24px;overflow-x:auto;-webkit-overflow-scrolling:touch}
-.tab-nav::-webkit-scrollbar{display:none}
-.tab-btn{flex:1;min-width:72px;padding:9px 8px;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-family:var(--body);transition:all 0.15s;white-space:nowrap;touch-action:manipulation}
-
-/* ── Dorian cards mobile ── */
-@media(max-width:600px){
-  .dorian-card{flex-direction:column;gap:6px}
-  .dorian-meta{flex-direction:column;gap:4px}
-}
-
-/* ── Intelligence card mobile ── */
-@media(max-width:600px){
-  .intel-headline{font-size:17px !important}
-  .action-grid{flex-direction:column}
-}
-</style>
-</head>
-<body>
-<div id="root"></div>
-<script>
-// ─── CONFIG ───────────────────────────────────────────────────────
-
-const EXPECTED = [
-  {key:'01_sales',                  label:'Sales Report',               group:'Revenue'},
-  {key:'02_autopay',                label:'Autopay Report',             group:'Revenue'},
-  {key:'03_members_active',         label:'Active Members',             group:'Membership'},
-  {key:'04_members_cancelled',      label:'Cancelled Members',          group:'Membership'},
-  {key:'05_first_visit',            label:'First Visit Report',         group:'Membership'},
-  {key:'06_no_return',              label:'No Return Report',           group:'Membership'},
-  {key:'07_retention_management',   label:'Retention Management',       group:'Membership'},
-  {key:'08_retention',              label:'Retention Report',           group:'Membership'},
-  {key:'09_attendance_analysis',    label:'Attendance Analysis',        group:'Attendance'},
-  {key:'10_attendance_no_revenue',  label:'Attendance without Revenue', group:'Attendance'},
-  {key:'11_attendance_with_revenue',label:'Attendance with Revenue',    group:'Attendance'},
-  {key:'12_class_visit',            label:'Class Visit Report',         group:'Attendance'},
-];
-const GROUPS = ['Revenue','Membership','Attendance'];
-
-// ─── State ────────────────────────────────────────────────────────
-let state = {
-  view: 'loading',
-  tab: 'overview',
-  fileMap: {},
-  processing: false,
-  dragging: false,
-  dashData: null,
-  weeks: [],
-  selectedWeek: null,
-  allWeeksData: [],
-  allWeeksLoading: false,
-  error: null,
-};
-
-// ─── Render ───────────────────────────────────────────────────────
-function render() {
-  const root = document.getElementById('root');
-  if (state.view === 'loading')    root.innerHTML = renderLoading();
-  else if (state.view === 'empty') root.innerHTML = renderEmpty();
-  else if (state.view === 'upload')root.innerHTML = renderUpload();
-  else if (state.view === 'dashboard') root.innerHTML = renderDashboard();
-  bindEvents();
-}
-
-// ─── Loading ──────────────────────────────────────────────────────
-function renderLoading() {
-  return `
-  <div class="page fu" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px">
-    ${renderHeader()}
-    <div class="spinner" style="width:28px;height:28px;margin-top:32px"></div>
-    <div style="font-size:13px;color:var(--ink-3)">Loading dashboard…</div>
-  </div>`;
-}
-
-// ─── Empty state ──────────────────────────────────────────────────
-function renderEmpty() {
-  return `
-  <div class="page fu">
-    ${renderHeader()}
-    <div class="card">
-      <div class="empty">
-        <div class="empty-icon">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-            <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
-          </svg>
-        </div>
-        <div class="empty-title">No data yet</div>
-        <div class="empty-sub">Upload this week's Mindbody reports to get started.</div>
-        <button class="btn-primary" onclick="showUpload()">Upload Reports</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-// ─── Upload screen ────────────────────────────────────────────────
-function renderUpload() {
-  const loaded   = EXPECTED.filter(e => state.fileMap[e.key]?.status === 'ok').length;
-  const allReady = loaded === 12;
-  const errors   = EXPECTED.filter(e => state.fileMap[e.key]?.status === 'error').length;
-  const unknown  = Object.entries(state.fileMap).filter(([k]) => k.startsWith('__unknown__')).map(([,v]) => v);
-
-  if (state.processing) {
-    return `
-    <div class="page fu">
-      ${renderHeader()}
-      <div class="card">
-        <div class="processing">
-          <div class="processing-spinner"></div>
-          <div class="processing-title">Analysing your data…</div>
-          <div class="processing-sub">Claude is reading all 12 reports and building your dashboard.<br>This takes about 15–20 seconds.</div>
-        </div>
-      </div>
-    </div>`;
-  }
-
-  return `
-  <div class="page fu">
-    ${renderHeader()}
-
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <div>
-        <div style="font-family:var(--display);font-size:20px;color:var(--ink)">Upload Weekly Reports</div>
-        <div style="font-size:13px;color:var(--ink-3);margin-top:3px">Select all 12 CSV files at once</div>
-      </div>
-      <button class="btn-secondary" onclick="${state.dashData ? 'showDashboard()' : 'showEmpty()'}">← Back</button>
-    </div>
-
-    <!-- Drop zone -->
-    <div class="card">
-      <div class="card-label">Drop files here</div>
-      <div class="drop-zone ${allReady ? 'done' : state.dragging ? 'active' : ''}"
-           id="dropZone">
-        <input type="file" id="fileInput" multiple accept=".csv" style="display:none">
-        ${allReady ? `
-          <div class="done-icon">✓</div>
-          <div class="done-title">All 12 reports loaded</div>
-          <div class="done-sub" style="margin-top:4px">Ready to process</div>
-        ` : `
-          <div class="drop-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-          </div>
-          <div class="drop-title">${loaded === 0 ? 'Drop all 12 CSV files here' : `${loaded} of 12 loaded — add remaining files`}</div>
-          <div class="drop-sub">or click to browse · select all at once</div>
-        `}
-      </div>
-
-      <!-- Progress bar -->
-      <div class="progress-wrap">
-        <div class="progress-track">
-          <div class="progress-fill" style="width:${(loaded/12)*100}%"></div>
-        </div>
-        <div class="progress-label">${loaded} / 12</div>
-      </div>
-
-      <!-- Process button -->
-      ${allReady ? '<button id="processBtn" class="btn-primary" style="width:100%;margin-top:16px">Save &amp; Build Dashboard</button>' : ''}
-    </div>
-
-    <!-- Warnings -->
-    ${unknown.length > 0 ? `
-      <div class="warn-box">
-        <div class="warn-title">⚠ Unrecognised files — not loaded</div>
-        ${unknown.map(f => `<div class="warn-file">${f.filename}</div>`).join('')}
-        <div class="warn-hint">Filenames must match exactly — check the report guide.</div>
-      </div>
-    ` : ''}
-
-    ${errors > 0 ? `
-      <div class="warn-box" style="border-color:var(--red);background:var(--red-light)">
-        <div class="warn-title" style="color:var(--red)">✕ ${errors} file${errors > 1 ? 's' : ''} failed to parse</div>
-        <div class="warn-hint">Re-export from Mindbody as CSV and try again.</div>
-      </div>
-    ` : ''}
-
-    <!-- File groups -->
-    ${GROUPS.map(group => `
-      <div class="card">
-        <div class="card-label">${group}</div>
-        <div class="file-grid">
-          ${EXPECTED.filter(e => e.group === group).map(({key, label}) => {
-            const entry  = state.fileMap[key];
-            const status = entry?.status ?? 'waiting';
-            return `
-            <div class="file-row ${status === 'ok' ? 'ok' : status === 'error' ? 'error' : ''}">
-              <span class="dot" style="background:${status === 'ok' ? 'var(--green)' : status === 'error' ? 'var(--red)' : 'transparent'};border:${status === 'waiting' ? '1.5px dashed var(--ink-3)' : 'none'}"></span>
-              <div class="file-name">${label}</div>
-              <div class="file-key">${key}.csv</div>
-              ${status === 'ok'    ? `<div class="file-rows">${entry.rows.length} rows</div>` : ''}
-              ${status === 'error' ? `<div class="file-err">parse error</div>` : ''}
-            </div>`;
-          }).join('')}
-        </div>
-      </div>
-    `).join('')}
-
-    ${state.error ? `
-      <div class="warn-box" style="border-color:var(--red);background:var(--red-light)">
-        <div class="warn-title" style="color:var(--red)">Error</div>
-        <div class="warn-hint">${state.error}</div>
-      </div>
-    ` : ''}
-  </div>`;
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────
-function fmtC(n) { return '$' + (n||0).toLocaleString(); }
-function fmtPct(n) { return (n||0) + '%'; }
-function metricCard(label, value, sub, accentColor) {
-  const color = accentColor || 'var(--ink)';
-  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;box-shadow:var(--shadow)">
-    <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:10px">${label}</div>
-    <div style="font-family:var(--display);font-size:28px;color:${color};line-height:1.1">${value}</div>
-    ${sub ? `<div style="font-size:12px;color:var(--ink-3);margin-top:6px">${sub}</div>` : ''}
-  </div>`;
-}
-function sectionHeader(title, sub) {
-  return `<div style="margin-bottom:20px">
-    <div style="font-family:var(--display);font-size:22px;color:var(--ink)">${title}</div>
-    ${sub ? `<div style="font-size:13px;color:var(--ink-3);margin-top:3px">${sub}</div>` : ''}
-  </div>`;
-}
-function divider() {
-  return `<div style="height:1px;background:var(--border);margin:40px 0"></div>`;
-}
-function downloadCSV(rows, filename) {
-  if (!rows || !rows.length) return;
-  const headers = Object.keys(rows[0]);
-  const csv = [headers.join(','), ...rows.map(r => headers.map(h => '"' + (r[h]||'').toString().replace(/"/g,'""') + '"').join(','))].join('\n');
-  const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  a.download = filename;
-  a.click();
-}
-
-// ─── Dashboard ────────────────────────────────────────────────────
-function renderDashboard() {
-  const d     = state.dashData;
-  const c     = d.current;
-  const p     = d.previous;
-  const r     = c.revenue        || {};
-  const m     = c.membership     || {};
-  const a     = c.attendance     || {};
-  const dorian = c.dorian        || {};
-  const intel  = c.intelligence  || {};
-  const hs     = c.health_summary|| {};
-  const tab    = state.tab       || 'overview';
-
-  const newFounders   = c.new_founder_members || [];
-  const atRiskCount   = (dorian.critical||[]).length + (dorian.watch||[]).length + (dorian.lost||[]).length + (dorian.never_visited||[]).length;
-  const founderVisits = (c.founder_classes||[]).reduce((s,cl)=>s+(cl.founder_visits||0),0);
-
-  const wow = (curr, prev, isC) => {
-    if (!p || prev == null) return '';
-    const diff = curr - prev;
-    if (diff === 0) return '';
-    const color = diff > 0 ? 'var(--green)' : 'var(--red)';
-    const sign  = diff > 0 ? '+' : '−';
-    const val   = isC ? fmtC(Math.abs(diff)) : Math.abs(diff);
-    return `<span style="font-size:11px;color:${color};font-weight:500;margin-left:6px">${sign}${val} vs last week</span>`;
-  };
-
-  const pulse = (label, value, sub, color, wowHtml) => `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">${label}</div>
-      <div style="font-family:var(--display);font-size:28px;color:${color||'var(--ink)'};line-height:1.1">${value}</div>
-      <div style="font-size:11px;color:var(--ink-3);margin-top:6px">${sub}${wowHtml||''}</div>
-    </div>`;
-
-  const tabs = [
-    {id:'overview', label:'Overview'},
-    {id:'members',  label:'Members'},
-    {id:'revenue',  label:'Revenue'},
-    {id:'classes',  label:'Classes'},
-    {id:'trends',   label:'Trends'},
-  ];
-
-  const tabNav = `
-    <div class="tab-nav">
-      ${tabs.map(t => `
-        <button class="tab-btn" onclick="state.tab='${t.id}';render()"
-          style="font-weight:${t.id===tab?'600':'400'};background:${t.id===tab?'var(--surface)':'transparent'};color:${t.id===tab?'var(--green)':'var(--ink-3)'};box-shadow:${t.id===tab?'0 1px 3px rgba(0,0,0,0.08)':'none'}">${t.label}</button>
-      `).join('')}
-    </div>`;
-
-  // ─── TAB: OVERVIEW ──────────────────────────────────────────────
-  const tabOverview = `
-    <div class="g3" style="margin-bottom:20px">
-      ${pulse('MRR', fmtC(r.mrr), 'Monthly recurring revenue', 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
-      ${pulse('Founder Members', m.active_count||'—', (800-(m.active_count||0))+' to full capacity', 'var(--ink)', wow(m.active_count, p?.membership?.active_count, false))}
-      ${pulse('Net Growth', (m.net_growth>0?'+':'')+m.net_growth, (m.new_this_week||0)+' joined · '+(m.churned_this_week||0)+' churned', (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
-      ${pulse('Member Health', hs.green||0, '<span style="color:var(--amber)">●'+(hs.amber||0)+' at risk</span> &nbsp;<span style="color:var(--red)">●'+(hs.red||0)+' urgent</span>', 'var(--green)')}
-      ${pulse('Avg Visits / Member', (c.avg_founder_visits||0)+'/wk', 'Target: 3+ per week', (c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)')}
-      ${pulse('Forecasted ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
-    </div>
-
-    <!-- Progress bar -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:24px;box-shadow:var(--shadow)">
-      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:12px;font-weight:500;color:var(--ink-2)">Progress to 800 Founder Members</div>
-        <div style="font-family:var(--mono);font-size:12px;color:var(--green)">${m.active_count||0} / 800 · ${m.progress_to_800_pct||0}%</div>
-      </div>
-      <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
-        <div style="height:100%;background:var(--green);border-radius:3px;width:${Math.min(m.progress_to_800_pct||0,100)}%;transition:width 0.6s ease"></div>
-      </div>
-    </div>
-
-    <!-- Intelligence -->
-    <div style="background:var(--ink);border-radius:var(--radius-lg);padding:20px;margin-bottom:12px">
-      <div style="font-size:10px;font-weight:600;letter-spacing:0.14em;color:rgba(255,255,255,0.35);text-transform:uppercase;margin-bottom:10px">CEO BRIEFING · WEEK OF ${c.week_of||''}</div>
-      <div style="font-family:var(--display);font-size:20px;color:#fff;line-height:1.5;margin-bottom:12px" class="intel-headline">${intel.headline||'—'}</div>
-      ${intel.insight ? `<div style="font-size:14px;color:rgba(255,255,255,0.8);line-height:1.7;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px">${intel.insight}</div>` : ''}
-    </div>
-
-    <!-- Risk + Bright spot -->
-    <div class="g2" style="margin-bottom:12px">
-      <div style="background:var(--red-light);border:1px solid var(--red);border-radius:var(--radius-lg);padding:18px 20px">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--red);text-transform:uppercase;margin-bottom:8px">⚠ Risk</div>
-        <div style="font-size:14px;color:var(--ink);line-height:1.6">${intel.risk||'—'}</div>
-      </div>
-      <div style="background:var(--green-light);border:1px solid var(--green);border-radius:var(--radius-lg);padding:18px 20px">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--green);text-transform:uppercase;margin-bottom:8px">✦ Bright Spot</div>
-        <div style="font-size:14px;color:var(--ink);line-height:1.6">${intel.bright_spot||'—'}</div>
-      </div>
-    </div>
-
-    <!-- Actions -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px 24px;box-shadow:var(--shadow)">
-      <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Strategic Actions & Delegation</div>
-      <div style="display:flex;flex-direction:column;gap:14px">
-        ${(intel.actions||[]).map((act,i) => {
-          const isDeleg = act.toLowerCase().includes('dorian') || act.toLowerCase().includes('delegate') || act.toLowerCase().includes('team');
-          return `<div style="display:flex;gap:14px;align-items:flex-start">
-            <div style="width:26px;height:26px;border-radius:50%;background:${isDeleg?'var(--amber)':'var(--green)'};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${isDeleg?'D':i+1}</div>
-            <div>
-              <div style="font-size:10px;font-weight:600;color:${isDeleg?'var(--amber)':'var(--green)'};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">${isDeleg?'Delegate':'Strategic'}</div>
-              <div style="font-size:14px;color:var(--ink);line-height:1.6">${act}</div>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`;
-
-  // ─── TAB: MEMBERS ────────────────────────────────────────────────
-  const tabMembers = `
-    <div class="g4" style="margin-bottom:16px">
-      ${pulse('Active Members', m.active_count||'—', 'Founder Members on autopay', 'var(--ink)')}
-      ${pulse('New This Week', m.new_this_week||0, 'Joined as Founder Members', 'var(--green)')}
-      ${pulse('Churned', m.churned_this_week||0, fmtPct(m.churn_rate_pct)+' churn rate', (m.churned_this_week||0)>0?'var(--red)':'var(--ink)')}
-      ${pulse('Net Growth', (m.net_growth>0?'+':'')+m.net_growth, 'New minus churned', (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
-    </div>
-
-    ${renderHealthSummary(c)}
-
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;margin-top:24px">
-      <div>
-        <div style="font-size:15px;font-weight:600;color:var(--ink)">Dorian's Action List</div>
-        <div style="font-size:12px;color:var(--ink-3);margin-top:2px">${atRiskCount} members to contact · ${newFounders.length} new members need follow-up</div>
-      </div>
-      <button class="btn-primary" onclick="handleDorianDownload()">⬇ Download CSV</button>
-    </div>
-    ${renderDorianList(dorian, newFounders)}`;
-
-  // ─── TAB: REVENUE ────────────────────────────────────────────────
-  const tabRevenue = `
-    <div class="g2" style="margin-bottom:16px">
-      ${pulse('MRR', fmtC(r.mrr), 'Monthly Founder Member autopay', 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
-      ${pulse('Forecasted ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
-      ${pulse('Revenue / Member', fmtC(r.revenue_per_member), 'MRR ÷ '+(m.active_count||0)+' members / month', 'var(--ink)')}
-      ${pulse('Weekly Sales', fmtC(r.total_weekly), 'Non-autopay revenue this week', 'var(--ink)')}
-    </div>
-
-    <div class="g2">
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">MRR Stability</div>
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-          <span style="font-size:13px;color:var(--ink-2)">MRR as % of total</span>
-          <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">${r.mrr_pct||0}%</span>
-        </div>
-        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:10px">
-          <div style="height:100%;background:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'};border-radius:3px;width:${Math.min(r.mrr_pct||0,100)}%"></div>
-        </div>
-        <div style="font-size:12px;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">
-          ${(r.mrr_pct||0)>=70?'✓ MRR target met (>70%)':'Below 70% target — grow Founder Members to stabilise'}
-        </div>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Pack & Class Sales</div>
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-          <span style="font-size:13px;color:var(--ink-2)">Non-autopay this week</span>
-          <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--ink)">${fmtC(r.pack_and_class||r.total_weekly)}</span>
-        </div>
-        <div style="background:var(--amber-light);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--amber);margin-top:8px">
-          ↑ Pack & class buyers are Founder Member prospects — each is a warm conversion opportunity
-        </div>
-      </div>
-    </div>`;
-
-  // ─── TAB: CLASSES ────────────────────────────────────────────────
-  const instrData  = c.instructor_data || [];
-  const peakTimes  = c.peak_times      || [];
-  const peakDays   = c.peak_days       || [];
-  const allClasses = c.class_data      || [];
-  const maxVisits  = allClasses.length ? allClasses[0].visits : 1;
-
-  // ── Classes: actionable insights ──
-  const avgVisitsAllClasses = allClasses.length ? Math.round(allClasses.reduce((s,cl)=>s+cl.visits,0)/allClasses.length) : 0;
-  const underperforming = allClasses.filter(cl => cl.visits < avgVisitsAllClasses * 0.5 && cl.visits > 0);
-  const highCancelClasses = allClasses.filter(cl => cl.late_cancels >= 10).sort((a,b) => b.late_cancels - a.late_cancels);
-  const topInstructor = instrData[0] || null;
-  const bottomInstructor = instrData.length > 1 ? instrData[instrData.length-1] : null;
-  const topTime = peakTimes[0] || null;
-  const secondTime = peakTimes[1] || null;
-  // Gap time = a time slot that exists but has low volume vs top — candidate for new class
-  const gapOpportunity = peakDays.length ? peakDays[peakDays.length-1] : null;
-
-  const insightRows = [];
-
-  // 1. Underperforming classes
-  if (underperforming.length) {
-    insightRows.push({
-      color: 'var(--red)', bg: 'var(--red-light)', icon: '✕',
-      label: 'Consider cutting or rescheduling',
-      text: underperforming.map(cl => '<strong>' + cl.name + '</strong> (' + cl.visits + ' visits' + (cl.late_cancels > 0 ? ', ' + cl.late_cancels + ' late cancels' : '') + ')').join(', ') + ' — less than half the average class attendance of ' + avgVisitsAllClasses + '.',
-    });
-  }
-
-  // 2. Late cancel problem classes
-  if (highCancelClasses.length) {
-    insightRows.push({
-      color: 'var(--amber)', bg: 'var(--amber-light)', icon: '⚠',
-      label: 'Late cancel problem — enforce policy',
-      text: highCancelClasses.slice(0,3).map(cl => '<strong>' + cl.name + '</strong> (' + cl.late_cancels + ' late cancels)').join(', ') + '. High late cancels waste instructor time and block real bookings.',
-    });
-  }
-
-  // 3. Instructor driving vs lagging
-  if (topInstructor && bottomInstructor && topInstructor.name !== bottomInstructor.name) {
-    insightRows.push({
-      color: 'var(--green)', bg: 'var(--green-light)', icon: '★',
-      label: 'Instructor performance gap',
-      text: '<strong>' + topInstructor.name + '</strong> is your top driver at ' + topInstructor.avg_per_class + ' avg check-ins/class across ' + topInstructor.classes_taught + ' classes. <strong>' + bottomInstructor.name + '</strong> is lowest at ' + bottomInstructor.avg_per_class + ' avg/class — review scheduling or mentoring.',
-    });
-  }
-
-  // 4. Best time to add new classes
-  if (topTime && secondTime) {
-    insightRows.push({
-      color: 'var(--green)', bg: 'var(--green-light)', icon: '+',
-      label: 'Best slots to add new classes',
-      text: '<strong>' + topTime.time + '</strong> (' + topTime.visits + ' visits) and <strong>' + secondTime.time + '</strong> (' + secondTime.visits + ' visits) are your highest-demand time slots. Adding capacity here will absorb demand before it drops off.',
-    });
-  }
-
-  // 5. Quietest day = opportunity
-  if (gapOpportunity) {
-    insightRows.push({
-      color: 'var(--amber)', bg: 'var(--amber-light)', icon: '↑',
-      label: 'Underserved day — growth opportunity',
-      text: '<strong>' + gapOpportunity.day + '</strong> has the fewest check-ins (' + gapOpportunity.visits + '). Adding a high-demand class type on this day could lift weekly visits.',
-    });
-  }
-
-  const classInsightsBlock = insightRows.length ? `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)">
-      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Class Decisions This Week</div>
-      <div style="display:flex;flex-direction:column;gap:12px">
-        ${insightRows.map(row => `
-          <div style="display:flex;gap:14px;align-items:flex-start;padding:14px;background:${row.bg};border-radius:var(--radius);border-left:3px solid ${row.color}">
-            <div style="width:24px;height:24px;border-radius:50%;background:${row.color};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${row.icon}</div>
-            <div>
-              <div style="font-size:10px;font-weight:600;color:${row.color};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">${row.label}</div>
-              <div style="font-size:13px;color:var(--ink);line-height:1.6">${row.text}</div>
-            </div>
-          </div>`).join('')}
-      </div>
-    </div>` : '';
-
-  const tabClasses = `
-    ${classInsightsBlock}
-    <div class="g4" style="margin-bottom:16px">
-      ${pulse('Total Check-ins', (a.total_visits||0).toLocaleString(), 'All visitors this week', 'var(--ink)')}
-      ${pulse('Founder Visits', founderVisits, (c.avg_founder_visits||0)+' avg / member', (c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)')}
-      ${pulse('Late Cancels', fmtPct(a.no_show_rate_pct||0), 'Of all bookings', (a.no_show_rate_pct||0)>10?'var(--amber)':'var(--ink)')}
-      ${pulse('First-Time Visitors', c.first_time_visitors||0, 'Acquisition pipeline', 'var(--green)')}
-    </div>
-
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:12px;box-shadow:var(--shadow)">
-      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">All Classes This Week</div>
-      ${allClasses.slice(0,8).map((cl,i) => {
-        const barW = Math.round(cl.visits/maxVisits*100);
-        const isFounderClass = !cl.name.toLowerCase().includes('reformer');
-        return '<div style="margin-bottom:14px">' +
-          '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">' +
-            '<div style="font-size:13px;font-weight:500;color:var(--ink)">' + cl.name +
-              (cl.top_instructor ? '<span style="font-size:11px;color:var(--ink-3);font-weight:400"> · ' + cl.top_instructor + '</span>' : '') +
-            '</div>' +
-            '<div style="font-size:12px;color:var(--ink-3);white-space:nowrap;margin-left:8px">' + cl.visits + ' visits' +
-              (cl.founder_visits > 0 && isFounderClass ? ' · <span style=\"color:var(--green)\">' + cl.founder_pct + '% Founders</span>' : '') +
-            '</div>' +
-          '</div>' +
-          '<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">' +
-            '<div style="height:100%;width:' + barW + '%;background:' + (isFounderClass && cl.founder_pct > 20 ? 'var(--green)' : 'var(--ink-3)') + ';border-radius:3px"></div>' +
-          '</div>' +
-          '<div style="font-size:10px;color:var(--ink-3);margin-top:3px">' + (cl.top_day||'') + (cl.top_time ? ' · ' + cl.top_time : '') + (cl.late_cancels > 0 ? ' · ' + cl.late_cancels + ' late cancels' : '') + '</div>' +
-        '</div>';
-      }).join('')}
-    </div>
-
-    <div class="g2">
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Instructor Performance</div>
-        <div style="font-size:11px;color:var(--ink-3);margin-bottom:14px">By total check-ins this week</div>
-        ${instrData.slice(0,8).map((ins,i) =>
-          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
-            '<div style="width:20px;height:20px;border-radius:50%;background:' + (i<3?'var(--green-light)':'var(--surface-2)') + ';color:' + (i<3?'var(--green)':'var(--ink-3)') + ';font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">' + (i+1) + '</div>' +
-            '<div style="flex:1;min-width:0">' +
-              '<div style="font-size:13px;font-weight:' + (i<3?'600':'400') + ';color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + ins.name + '</div>' +
-              '<div style="font-size:11px;color:var(--ink-3)">' + ins.visits + ' check-ins · ' + ins.classes_taught + ' classes · ' + ins.avg_per_class + ' avg/class</div>' +
-            '</div>' +
-          '</div>'
-        ).join('')}
-        ${!instrData.length ? '<div style="font-size:13px;color:var(--ink-3)">Upload CSVs to see data</div>' : ''}
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:12px">
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:12px">Peak Class Times</div>
-          ${peakTimes.slice(0,5).map((t,i) =>
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-              '<span style="font-size:13px;color:var(--ink);font-weight:' + (i===0?'600':'400') + '">' + t.time + '</span>' +
-              '<span style="font-family:var(--mono);font-size:12px;color:' + (i===0?'var(--green)':'var(--ink-3)') + '">' + t.visits + '</span>' +
-            '</div>'
-          ).join('')}
-          ${!peakTimes.length ? '<div style="font-size:13px;color:var(--ink-3)">No data</div>' : ''}
-        </div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow)">
-          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:12px">Busiest Days</div>
-          ${peakDays.slice(0,7).map((d,i) => {
-            const maxD = peakDays[0] ? peakDays[0].visits : 1;
-            const w = Math.round(d.visits/maxD*100);
-            return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">' +
-              '<div style="font-size:12px;color:var(--ink-2);width:30px;flex-shrink:0">' + d.day.slice(0,3) + '</div>' +
-              '<div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden">' +
-                '<div style="height:100%;width:' + w + '%;background:' + (i===0?'var(--green)':'var(--ink-3)') + ';border-radius:3px"></div>' +
-              '</div>' +
-              '<div style="font-family:var(--mono);font-size:11px;color:var(--ink-3);width:28px;text-align:right">' + d.visits + '</div>' +
-            '</div>';
-          }).join('')}
-          ${!peakDays.length ? '<div style="font-size:13px;color:var(--ink-3)">No data</div>' : ''}
-        </div>
-      </div>
-    </div>`;
-
-  const tabContent = {overview:tabOverview, members:tabMembers, revenue:tabRevenue, classes:tabClasses, trends:renderTrends()}[tab] || tabOverview;
-
-  return `
-  <div style="max-width:1100px;margin:0 auto;padding:24px 16px 0" class="fu">
-
-    <!-- Header -->
-    <div class="dash-header-wrap">
-      <div class="dash-header-left">
-        <div class="logo">P</div>
-        <div>
-          <div class="brand-name">Prana Wellness Club</div>
-          <div class="brand-sub">Week of ${c.week_of||''}</div>
-        </div>
-      </div>
-      <div class="dash-header-actions">
-        ${state.weeks&&state.weeks.length>1?`
-          <select class="week-select" onchange="switchWeek(this.value)">
-            ${state.weeks.map(w=>`<option value="${w.week_of}" ${w.week_of===state.selectedWeek?'selected':''}>${w.week_of}</option>`).join('')}
-          </select>`:''}
-        <button class="btn-secondary" onclick="showUpload()">↑ Upload</button>
-      </div>
-    </div>
-
-    ${tabNav}
-    <div style="padding-bottom:8px">${tabContent}</div>
-
-  </div>
-
-  <div style="height:24px"></div>`;
-}
-
-
-// ─── Health summary renderer ─────────────────────────────────────
-function renderHealthSummary(c) {
-  const hs = c.health_summary || {};
-  const total = (hs.green||0) + (hs.amber||0) + (hs.red||0) + (hs.frozen||0);
-  if (!total) return '';
-  return `
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 22px;margin-bottom:20px;box-shadow:var(--shadow)">
-    <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Founder Member Health — ${total} total</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <div style="flex:1;min-width:100px;background:var(--green-light);border-radius:var(--radius);padding:12px 14px;text-align:center">
-        <div style="font-family:var(--display);font-size:24px;color:var(--green)">${hs.green||0}</div>
-        <div style="font-size:11px;color:var(--green);font-weight:500;margin-top:2px">● Healthy</div>
-        <div style="font-size:10px;color:var(--ink-3);margin-top:1px">3+ visits/month</div>
-      </div>
-      <div style="flex:1;min-width:100px;background:var(--amber-light);border-radius:var(--radius);padding:12px 14px;text-align:center">
-        <div style="font-family:var(--display);font-size:24px;color:var(--amber)">${hs.amber||0}</div>
-        <div style="font-size:11px;color:var(--amber);font-weight:500;margin-top:2px">● At Risk</div>
-        <div style="font-size:10px;color:var(--ink-3);margin-top:1px">1-2 visits/month</div>
-      </div>
-      <div style="flex:1;min-width:100px;background:var(--red-light);border-radius:var(--radius);padding:12px 14px;text-align:center">
-        <div style="font-family:var(--display);font-size:24px;color:var(--red)">${hs.red||0}</div>
-        <div style="font-size:11px;color:var(--red);font-weight:500;margin-top:2px">● Urgent</div>
-        <div style="font-size:10px;color:var(--ink-3);margin-top:1px">0 visits or 21+ days absent</div>
-      </div>
-      ${hs.frozen ? `
-      <div style="flex:1;min-width:100px;background:var(--surface-2);border-radius:var(--radius);padding:12px 14px;text-align:center">
-        <div style="font-family:var(--display);font-size:24px;color:var(--ink-3)">${hs.frozen}</div>
-        <div style="font-size:11px;color:var(--ink-3);font-weight:500;margin-top:2px">● Frozen</div>
-        <div style="font-size:10px;color:var(--ink-3);margin-top:1px">Membership paused</div>
-      </div>` : ''}
-    </div>
-  </div>`;
-}
-
-// ─── Dorian list renderer ─────────────────────────────────────────
-function renderDorianList(dorian, newMembers) {
-  const tiers = [
-    { key: 'never_visited', label: '⚠ Never Visited',  color: 'var(--red)',   bg: 'var(--red-light)',   desc: 'Paid but never came in' },
-    { key: 'critical',      label: '🔴 Critical',       color: 'var(--red)',   bg: 'var(--red-light)',   desc: '14–29 days no visit' },
-    { key: 'lost',          label: '⚫ Lost',            color: 'var(--ink-2)', bg: 'var(--surface-2)',   desc: '30+ days no visit' },
-    { key: 'watch',         label: '🟡 Watch',           color: 'var(--amber)', bg: 'var(--amber-light)', desc: '1–2 visits/month' },
-    { key: 'win_back',      label: '♻ Win-Back',        color: 'var(--green)', bg: 'var(--green-light)', desc: 'Cancelled this week' },
-  ];
-
-  return tiers.map(tier => {
-    const members = dorian[tier.key] || [];
-    if (!members.length) return `
-      <div style="margin-bottom:12px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--ink-3);font-size:13px">
-        <strong style="color:${tier.color}">${tier.label}</strong> — No members in this category
-      </div>`;
-
-    return `
-      <div style="margin-bottom:16px">
-        <div style="font-size:11px;font-weight:600;color:${tier.color};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">${tier.label} · ${tier.desc} · ${members.length} member${members.length>1?'s':''}</div>
-        ${members.map(m => `
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;background:${tier.bg};border:1px solid var(--border);border-left:3px solid ${tier.color};border-radius:var(--radius);margin-bottom:6px;flex-wrap:wrap">
-            <div>
-              <div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:3px">${m.name}</div>
-              <div style="font-size:12px;color:var(--ink-3)">${[m.membership, m.email, m.phone].filter(Boolean).join(' · ')}</div>
-              ${m.member_since ? `<div style="font-size:11px;color:var(--ink-3);margin-top:2px">Member since ${m.member_since}${m.lifetime_visits ? ' · ' + m.lifetime_visits + ' lifetime visits' : ''}</div>` : ''}
-              ${m.cancel_date ? `<div style="font-size:11px;color:var(--ink-3);margin-top:2px">Cancelled: ${m.cancel_date}</div>` : ''}
-            </div>
-            ${m.days_since_visit ? `<div style="font-family:var(--mono);font-size:13px;font-weight:500;color:${tier.color};white-space:nowrap">${m.days_since_visit}d ago</div>` : ''}
-          </div>`).join('')}
-      </div>`;
-  }).join('') +
-  (newMembers && newMembers.length ? `
-    <div style="margin-bottom:16px">
-      <div style="font-size:11px;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">🆕 New Founder Members This Week · Follow Up Within 48h · ${newMembers.length} member${newMembers.length>1?'s':''}</div>
-      ${newMembers.map(m => `
-        <div style="padding:12px 14px;background:var(--green-light);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:var(--radius);margin-bottom:6px">
-          <div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:3px">${m.name}</div>
-          <div style="font-size:12px;color:var(--ink-3)">${[m.membership, m.email, m.phone].filter(Boolean).join(' · ')}</div>
-          <div style="font-size:11px;color:var(--ink-3);margin-top:3px;display:flex;gap:12px;flex-wrap:wrap">
-            <span>Joined ${m.member_since}</span>
-            <span>${m.visits_so_far === 0 ? '<span style="color:var(--red);font-weight:500">⚠ Has not visited yet</span>' : m.visits_so_far + ' visit' + (m.visits_so_far>1?'s':'') + ' so far'}</span>
-          </div>
-        </div>`).join('')}
-    </div>` : '');
-}
-
-// ─── Dorian CSV download ──────────────────────────────────────────
-function handleDorianDownload() {
-  const current = state.dashData?.current || {};
-  const dorian = current.dorian || {};
-  const newMembers = current.new_founder_members || [];
-
-  const blank = { segment:'', name:'', membership:'', email:'', phone:'', member_since:'', last_visit:'', days_absent:'', days_since_visit:'', lifetime_visits:'', checkins_30:'', visits_so_far:'', cancel_date:'' };
-
-  const map = (rows, segment) => rows.map(m => ({
-    ...blank,
-    segment,
-    name: m.name || '',
-    membership: m.membership || '',
-    email: m.email || '',
-    phone: m.phone || '',
-    member_since: m.member_since || '',
-    last_visit: m.last_visit || '',
-    days_absent: m.days_absent ?? '',
-    days_since_visit: m.days_since_visit ?? '',
-    lifetime_visits: m.lifetime_visits ?? '',
-    checkins_30: m.checkins_30 ?? '',
-    visits_so_far: m.visits_so_far ?? '',
-    cancel_date: m.cancel_date || '',
-  }));
-
-  const all = [
-    ...map(newMembers,                  'New Founder Member - Follow Up 48h'),
-    ...map(dorian.never_visited || [],  'Never Visited - Paid but never came in'),
-    ...map(dorian.critical || [],       'Critical - 14-29 days no visit'),
-    ...map(dorian.lost || [],           'Lost - 30+ days no visit'),
-    ...map(dorian.watch || [],          'Watch - 1-2 visits/month'),
-    ...map(dorian.win_back || [],       'Win-Back - Cancelled this week'),
-  ];
-
-  if (!all.length) return alert('No members in action list.');
-  downloadCSV(all, 'dorian-action-list-' + (current.week_of || '') + '.csv');
-}
-
-// ─── Shared header ────────────────────────────────────────────────
-function renderHeader() {
-  return `
-  <div class="header">
-    <div class="logo">P</div>
-    <div>
-      <div class="brand-name">Prana Wellness Club</div>
-      <div class="brand-sub">CEO Dashboard</div>
-    </div>
-  </div>`;
-}
-
-// ─── Events ───────────────────────────────────────────────────────
-function bindEvents() {
-  const processBtn = document.getElementById('processBtn');
-  if (processBtn) processBtn.onclick = processFiles;
-
-  const fileInput = document.getElementById('fileInput');
-  if (fileInput) fileInput.onchange = handleFiles;
-
-  const dropZone = document.getElementById('dropZone');
-  if (dropZone) {
-    dropZone.onclick = () => {
-      const loaded = EXPECTED.filter(e => state.fileMap[e.key]?.status === 'ok').length;
-      if (loaded < 12) document.getElementById('fileInput')?.click();
-    };
-    dropZone.ondragover  = handleDragOver;
-    dropZone.ondragleave = handleDragLeave;
-    dropZone.ondrop      = handleDrop;
-  }
-}
-
-function showUpload() {
-  state.view = 'upload';
-  state.fileMap = {};
-  state.error = null;
-  render();
-}
-
-function showDashboard() {
-  state.view = 'dashboard';
-  render();
-}
-
-function showEmpty() {
-  state.view = 'empty';
-  render();
-}
-
-function handleDragOver(e) {
-  e.preventDefault();
-  state.dragging = true;
-  const dz = document.getElementById('dropZone');
-  if (dz) dz.className = 'drop-zone active';
-}
-
-function handleDragLeave() {
-  state.dragging = false;
-  const dz = document.getElementById('dropZone');
-  if (dz) dz.className = 'drop-zone';
-}
-
-function handleDrop(e) {
-  e.preventDefault();
-  state.dragging = false;
-  processRawFiles(Array.from(e.dataTransfer.files));
-}
-
-function handleFiles(e) {
-  processRawFiles(Array.from(e.target.files));
-}
-
-async function processRawFiles(rawFiles) {
-  for (const file of rawFiles) {
-    const key   = file.name.replace(/\.csv$/i, '').trim();
-    const valid = EXPECTED.some(e => e.key === key);
-    if (!valid) {
-      state.fileMap['__unknown__' + file.name] = {status:'unknown', filename:file.name};
-      continue;
-    }
-    try {
-      const rows = await new Promise((res, rej) =>
-        Papa.parse(file, {header:true, skipEmptyLines:true, complete:r=>res(r.data), error:rej})
-      );
-      state.fileMap[key] = {status:'ok', rows, filename:file.name};
-    } catch {
-      state.fileMap[key] = {status:'error', rows:[], filename:file.name};
-    }
-  }
-  render();
-}
-
-// ─── Pre-aggregate before sending ────────────────────────────────
-function aggregateData() {
-  const fm  = state.fileMap;
-  const get = key => fm[key]?.rows ?? [];
-
-  function toNum(v) {
-    if (!v) return 0;
-    const n = parseFloat(String(v).replace(/[$,]/g,''));
-    return isNaN(n) ? 0 : n;
-  }
-
-  function fixName(raw) {
-    if (!raw) return '';
-    const s = String(raw).replace(/"/g,'').trim();
-    if (s.includes(',')) {
-      const parts = s.split(',');
-      return (parts[1]||'').trim() + ' ' + (parts[0]||'').trim();
-    }
-    return s;
-  }
-
-  const salesRows    = get('01_sales');
-  const autopayRows  = get('02_autopay');
-  const activeRows   = get('03_members_active');
-
-  function parseMDY(str) {
-    if (!str) return null;
-    const p = str.trim().split('/');
-    if (p.length !== 3) return null;
-    const m = parseInt(p[0]), d = parseInt(p[1]), y = parseInt(p[2]);
-    if (!m || !d || !y) return null;
-    return { y, m, d };
-  }
-
-  function mondayOfDate(y, m, d) {
-    const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
-    let yr = y;
-    if (m < 3) yr--;
-    const dow = (yr + Math.floor(yr/4) - Math.floor(yr/100) + Math.floor(yr/400) + t[m-1] + d) % 7;
-    const daysBack = dow === 0 ? 6 : dow - 1;
-    let rd = d - daysBack, rm = m, ry = y;
-    if (rd < 1) {
-      rm--;
-      if (rm < 1) { rm = 12; ry--; }
-      const daysInPrevMonth = [0,31,28+(ry%4===0&&(ry%100!==0||ry%400===0)?1:0),31,30,31,30,31,31,30,31,30,31][rm];
-      rd = daysInPrevMonth + rd;
-    }
-    return ry + '-' + String(rm).padStart(2,'0') + '-' + String(rd).padStart(2,'0');
-  }
-
-  let weekOf;
   try {
-    const weekCounts = {};
-    salesRows.forEach(r => {
-      const p = parseMDY(r['Sale Date']);
-      if (!p) return;
-      const mon = mondayOfDate(p.y, p.m, p.d);
-      weekCounts[mon] = (weekCounts[mon] || 0) + 1;
-    });
-    let maxCount = 0;
-    Object.entries(weekCounts).forEach(([week, count]) => {
-      if (count > maxCount) { maxCount = count; weekOf = week; }
-    });
+    const data = req.body;
+    if (!data) return res.status(400).json({ error: 'No data received' });
 
-    if (!weekOf || maxCount < 5) {
-      const attendRows = get('09_attendance_analysis');
-      const weekCounts2 = {};
-      attendRows.forEach(r => {
-        const p = parseMDY(r['Date']);
-        if (!p) return;
-        const mon = mondayOfDate(p.y, p.m, p.d);
-        weekCounts2[mon] = (weekCounts2[mon] || 0) + 1;
-      });
-      let maxCount2 = 0;
-      Object.entries(weekCounts2).forEach(([week, count]) => {
-        if (count > maxCount2) { maxCount2 = count; weekOf = week; }
-      });
-    }
-  } catch(e) { console.error('weekOf error:', e); }
+    const key = process.env.ANTHROPIC_KEY;
+    if (!key) return res.status(500).json({ error: 'ANTHROPIC_KEY not set' });
 
-  console.log('[Prana] salesRows count:', salesRows.length, 'weekOf:', weekOf);
-
-  if (!weekOf) {
-    const now = new Date();
-    const y = now.getFullYear(), m = now.getMonth()+1, d = now.getDate();
-    weekOf = mondayOfDate(y, m, d);
-  }
-
-  const [wsY, wsM, wsD] = weekOf.split('-').map(Number);
-  const weekStart = new Date(wsY, wsM - 1, wsD, 0, 0, 0, 0);
-  // Week end = Sunday 23:59:59 (6 days after Monday)
-  const weekEnd = new Date(wsY, wsM - 1, wsD + 6, 23, 59, 59, 999);
-
-  const cancelRows   = get('04_members_cancelled');
-  const firstRows    = get('05_first_visit');
-  const noReturnRows = get('06_no_return');
-  const retMgmtRows  = get('07_retention_management');
-
-  // ── Revenue ──
-  const sales_total = salesRows.reduce((s,r) => {
-    return s + toNum(r['Item Total'] || r['Total'] || r['Amount'] || 0);
-  }, 0);
-
-  // ── Membership ──
-  const active_count = activeRows.length;
-  const mrr          = active_count * 199;
-
-  // New Founder Members this week
-  const first_visit_count = retMgmtRows.filter(r => {
-    const ms   = r['Member Since'] || '';
-    const type = (r['Membership Type'] || '').toLowerCase();
-    if (!type.includes('founder')) return false;
-    try { return new Date(ms) >= weekStart; } catch { return false; }
-  }).length;
-
-  // ── FIXED: Cancelled THIS WEEK ONLY ──
-  // Cancellation Date format: "Terminated from MM/DD/YYYY"
-  const cancelled_count = cancelRows.filter(r => {
-    const raw = (r['Cancellation Date'] || '').trim();
-    // Strip "Terminated from " prefix if present
-    const dateStr = raw.replace(/^Terminated from\s*/i, '').trim();
-    if (!dateStr) return false;
+    // ── Fetch previous week (for wow comparisons) ──
+    let previous = null;
     try {
-      const d = new Date(dateStr);
-      return !isNaN(d) && d >= weekStart && d <= weekEnd;
-    } catch { return false; }
-  }).length;
+      const prevRes   = await fetch(APPS_SCRIPT_URL + '?action=get_previous&week_of=' + encodeURIComponent(data.week_of), { redirect: 'follow' });
+      const prevText  = await prevRes.text();
+      const prevClean = prevText.trim().replace(/^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/, '').replace(/\)\s*;?\s*$/, '');
+      const prevData  = JSON.parse(prevClean);
+      if (prevData.ok) previous = prevData.data;
+    } catch { /* optional */ }
 
-  const first_time_visitors = firstRows.length;
+    // ── Use history sent from browser (last 4 weeks already loaded) ──
+    const historyWeeks = Array.isArray(data.history) ? data.history : [];
 
-  // ── Build Founder Member health map ──
-  const founderMap = {};
-  retMgmtRows.forEach(r => {
-    if (!(r['Membership Type']||'').includes('Founder')) return;
-    const name = ((r['First name']||'').trim() + ' ' + (r['Last name']||'').trim()).trim();
-    if (!name) return;
-    const c30  = parseInt(r['Check Ins 30 Day']||'0') || 0;
-    const cYTD = parseInt(r['Check Ins YTD']||'0') || 0;
-    const lv   = r['Last'] || '';
-    const freeze = (r['Freeze']||'') === 'Yes';
-    let daysAbsent = null;
-    // Use weekEnd as reference date so health reflects end-of-week state, not today
-    try { const d = new Date(lv); if (!isNaN(d)) daysAbsent = Math.floor((weekEnd - d) / 86400000); } catch {}
-    let health = 'green';
-    if (freeze) health = 'frozen';
-    else if (c30 === 0 || daysAbsent >= 21) health = 'red';
-    else if (c30 <= 2) health = 'amber';
-    founderMap[name.toLowerCase()] = {
-      name, email: (r['Email']||'').trim(), phone: (r['Home phone']||'').trim(),
-      membership: 'Founder Member',
-      member_since: r['Member Since']||'', checkins_30: c30, checkins_ytd: cYTD,
-      last_visit: lv, days_absent: daysAbsent, health, freeze,
+    const slimData = {
+      week_of:             data.week_of,
+      sales_total:         data.sales_total,
+      autopay_total:       data.autopay_total,
+      active_count:        data.active_count,
+      new_this_week:       data.first_visit_count,
+      cancelled_count:     data.cancelled_count,
+      first_time_visitors: data.first_time_visitors,
+      no_show_count:       data.no_show_count,
+      avg_founder_visits:  data.avg_founder_visits,
+      health_summary:      data.health_summary,
+      no_return_members:   (data.no_return_members  || []).slice(0, 10),
+      cancelled_members:   (data.cancelled_members  || []).slice(0, 5),
+      new_founder_members: (data.new_founder_members|| []).slice(0, 5),
+      class_data:          (data.class_data         || []).slice(0, 10),
+      founder_classes:     (data.founder_classes    || []).slice(0, 5),
+      instructor_data:     (data.instructor_data    || []).slice(0, 5),
+      peak_times:          (data.peak_times         || []).slice(0, 5),
+      peak_days:           (data.peak_days          || []).slice(0, 7),
     };
-  });
 
-  // ── Health summary ──
-  const allF = Object.values(founderMap);
-  const health_summary = {
-    green:  allF.filter(f => f.health==='green').length,
-    amber:  allF.filter(f => f.health==='amber').length,
-    red:    allF.filter(f => f.health==='red').length,
-    frozen: allF.filter(f => f.freeze).length,
-  };
-
-  // ── Dorian list ──
-  const dorianCritical = allF
-    .filter(f => f.health === 'red' && !f.freeze && f.days_absent >= 14 && f.days_absent < 30)
-    .sort((a,b) => (b.days_absent||0) - (a.days_absent||0))
-    .map(f => ({
-      name: f.name, email: f.email, phone: f.phone, membership: f.membership,
-      last_visit: f.last_visit, days_absent: f.days_absent||0,
-      lifetime_visits: f.checkins_ytd||0, checkins_30: f.checkins_30||0,
-      member_since: f.member_since, health: 'red',
-    }));
-
-  const dorianWatch = allF
-    .filter(f => f.health === 'amber' && !f.freeze)
-    .sort((a,b) => (b.days_absent||0) - (a.days_absent||0))
-    .map(f => ({
-      name: f.name, email: f.email, phone: f.phone, membership: f.membership,
-      last_visit: f.last_visit, days_absent: f.days_absent||0,
-      lifetime_visits: f.checkins_ytd||0, checkins_30: f.checkins_30||0,
-      member_since: f.member_since, health: 'amber',
-    }));
-
-  const dorianLost = allF
-    .filter(f => f.health === 'red' && !f.freeze && (f.days_absent||0) >= 30)
-    .sort((a,b) => (b.days_absent||0) - (a.days_absent||0))
-    .map(f => ({
-      name: f.name, email: f.email, phone: f.phone, membership: f.membership,
-      last_visit: f.last_visit, days_absent: f.days_absent||0,
-      lifetime_visits: f.checkins_ytd||0, checkins_30: f.checkins_30||0,
-      member_since: f.member_since, health: 'red',
-    }));
-
-  const dorianNeverVisited = allF
-    .filter(f => !f.freeze && (f.checkins_ytd||0) === 0)
-    .map(f => ({
-      name: f.name, email: f.email, phone: f.phone, membership: f.membership,
-      last_visit: f.last_visit, days_absent: f.days_absent||0,
-      lifetime_visits: 0, checkins_30: 0,
-      member_since: f.member_since, health: 'red',
-      never_visited: true,
-    }));
-
-  const browser_dorian = {
-    critical:      dorianCritical,
-    watch:         dorianWatch,
-    lost:          dorianLost,
-    never_visited: dorianNeverVisited,
-  };
-
-  // ── No-return Founder Members ──
-  const no_return_members = noReturnRows
-    .filter(r => (r['Pricing Option']||'').includes('Founder'))
-    .slice(0, 20)
-    .map(r => {
-      const name   = fixName(r['Client']||'');
-      const enrich = founderMap[name.toLowerCase()] || {};
-      return {
-        name, email: enrich.email||(r['Email']||'').trim(),
-        phone: enrich.phone||(r['Phone']||'').trim(),
-        membership: (r['Pricing Option']||'').trim(),
-        last_visit: (r['Last Visit']||'').trim(),
-        days_absent: enrich.days_absent||0,
-        lifetime_visits: enrich.checkins_ytd||0,
-        checkins_30: enrich.checkins_30||0,
-        member_since: enrich.member_since||'',
-        health: enrich.health||'red',
+    if (previous) {
+      slimData.previous_week = {
+        week_of:       previous.week_of,
+        active_count:  previous.membership?.active_count  || previous.active_count  || 0,
+        new_this_week: previous.membership?.new_this_week || 0,
+        churned:       previous.membership?.churned_this_week || 0,
+        mrr:           previous.revenue?.mrr || previous.autopay_total || 0,
+        avg_visits:    previous.avg_founder_visits || 0,
       };
-    });
-
-  // ── New Founder Members this week ──
-  const new_founder_members = retMgmtRows
-    .filter(r => (r['Membership Type']||'').includes('Founder'))
-    .filter(r => { try { return new Date(r['Member Since']) >= weekStart; } catch { return false; } })
-    .map(r => ({
-      name: ((r['First name']||'').trim()+' '+(r['Last name']||'').trim()).trim(),
-      email: (r['Email']||'').trim(), phone: (r['Home phone']||'').trim(),
-      membership: 'Founder Member',
-      member_since: r['Member Since']||'',
-      visits_so_far: parseInt(r['Check Ins YTD']||'0')||0,
-    }));
-
-  // ── Cancelled members ──
-  const cancelled_members = cancelRows
-    .filter(r => r['Name'] && r['Name'] !== 'Total: 5')
-    .map(r => {
-      const name   = (r['Name']||'').trim();
-      const enrich = founderMap[name.toLowerCase()] || {};
-      const cYTD   = enrich.checkins_ytd||0;
-      // Strip "Terminated from " prefix for display
-      const cancelDateRaw = (r['Cancellation Date']||'').replace(/^Terminated from\s*/i,'').trim();
-      return {
-        name, email: (r['Email Address ']||r['Email']||'').trim(),
-        phone: (r['Phone Number']||r['Phone']||'').trim(),
-        cancel_date: cancelDateRaw,
-        lifetime_visits: cYTD, member_since: enrich.member_since||'',
-        churn_signal: cYTD<=3?'never_formed_habit':cYTD<=10?'early_churn':'long_term_churn',
-      };
-    });
-
-  // ── Build Founder ID set ──
-  const founderIds = new Set(
-    retMgmtRows
-      .filter(r => (r['Membership Type']||'').includes('Founder'))
-      .map(r => (r['ID']||'').trim())
-      .filter(Boolean)
-  );
-
-  const attendRows = get('09_attendance_analysis');
-  const classMap   = {};
-  const instrMap   = {};
-  const timeMap    = {};
-  const dayMap     = {};
-  const days       = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  let late_cancel_count    = 0;
-  let founder_visits_total = 0;
-
-  attendRows.forEach(r => {
-    const className  = (r['Description']||'Unknown').trim();
-    const status     = (r['Status']||'').toLowerCase();
-    const clientId   = (r['Client ID']||'').trim();
-    const isFounder  = founderIds.has(clientId);
-    const rawStaff   = (r['Staff']||'').trim();
-    const startTime  = (r['Start time']||'').trim();
-    const dateStr    = (r['Date']||'').trim();
-
-    let instructor = rawStaff;
-    if (rawStaff.includes(',')) {
-      const parts = rawStaff.split(',');
-      instructor = (parts[1]||'').trim() + ' ' + (parts[0]||'').trim();
     }
 
-    let dayName = '';
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-5',
+        max_tokens: 8000,
+        messages: [{ role: 'user', content: buildPrompt(slimData, historyWeeks) }]
+      })
+    });
+
+    const claude = await response.json();
+
+    if (!claude.content || !claude.content[0]) {
+      return res.status(500).json({ error: 'No response from Claude', detail: claude });
+    }
+
+    let text = claude.content[0].text.trim();
+    text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    let result;
+    const startIdx = text.indexOf('{');
+    if (startIdx === -1) {
+      return res.status(500).json({ error: 'No JSON in Claude response', raw: text.substring(0, 500) });
+    }
+    let depth = 0, endIdx = -1;
+    for (let i = startIdx; i < text.length; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') { depth--; if (depth === 0) { endIdx = i; break; } }
+    }
+    if (endIdx === -1) {
+      return res.status(500).json({ error: 'Incomplete JSON in Claude response' });
+    }
     try {
-      const d = new Date(dateStr);
-      if (!isNaN(d)) dayName = days[d.getDay()];
-    } catch {}
-
-    if (!classMap[className]) classMap[className] = {
-      name: className, visits:0, founder_visits:0, late_cancels:0,
-      instructors:{}, times:{}, days:{}
-    };
-
-    if (status.includes('signed')) {
-      classMap[className].visits += 1;
-      if (isFounder) { classMap[className].founder_visits += 1; founder_visits_total += 1; }
-      if (instructor) classMap[className].instructors[instructor] = (classMap[className].instructors[instructor]||0)+1;
-      if (startTime)  classMap[className].times[startTime]        = (classMap[className].times[startTime]||0)+1;
-      if (dayName)    classMap[className].days[dayName]            = (classMap[className].days[dayName]||0)+1;
-
-      if (!instrMap[instructor]) instrMap[instructor] = {name:instructor, visits:0, classes_taught:new Set()};
-      instrMap[instructor].visits += 1;
-      instrMap[instructor].classes_taught.add(className+dateStr+startTime);
-
-      if (startTime) timeMap[startTime] = (timeMap[startTime]||0)+1;
-      if (dayName)   dayMap[dayName]    = (dayMap[dayName]||0)+1;
-
-    } else if (status.includes('late cancel')) {
-      classMap[className].late_cancels += 1;
-      late_cancel_count++;
-    }
-  });
-
-  const class_data = Object.values(classMap)
-    .filter(c => c.visits > 0)
-    .map(c => ({
-      name:           c.name,
-      visits:         c.visits,
-      founder_visits: c.founder_visits,
-      late_cancels:   c.late_cancels,
-      founder_pct:    c.visits > 0 ? Math.round(c.founder_visits/c.visits*100) : 0,
-      top_instructor: Object.entries(c.instructors).sort((a,b)=>b[1]-a[1])[0]?.[0] || '',
-      top_time:       Object.entries(c.times).sort((a,b)=>b[1]-a[1])[0]?.[0] || '',
-      top_day:        Object.entries(c.days).sort((a,b)=>b[1]-a[1])[0]?.[0] || '',
-    }))
-    .sort((a,b) => b.visits - a.visits);
-
-  const instructor_data = Object.values(instrMap)
-    .map(i => ({
-      name:          i.name,
-      visits:        i.visits,
-      classes_taught: i.classes_taught.size,
-      avg_per_class: i.classes_taught.size > 0 ? Math.round(i.visits/i.classes_taught.size) : 0,
-    }))
-    .sort((a,b) => b.visits - a.visits)
-    .slice(0, 10);
-
-  const peak_times = Object.entries(timeMap).sort((a,b)=>b[1]-a[1]).slice(0,5)
-    .map(([time,visits]) => ({time, visits}));
-  const peak_days  = Object.entries(dayMap).sort((a,b)=>b[1]-a[1])
-    .map(([day,visits]) => ({day, visits}));
-
-  const avg_founder_visits = founderIds.size > 0
-    ? Math.round(founder_visits_total/founderIds.size*10)/10 : 0;
-
-  const founder_classes = [...class_data]
-    .filter(c => c.founder_visits > 0)
-    .sort((a,b) => b.founder_pct - a.founder_pct);
-
-  const noRevRows     = get('10_attendance_no_revenue');
-  const no_show_count = noRevRows.filter(r =>
-    (r['Status']||'').toLowerCase().includes('no show') ||
-    (r['Status']||'').toLowerCase().includes('late cancel')
-  ).length || late_cancel_count;
-
-  return {
-    week_of: weekOf,
-    sales_total:          Math.round(sales_total),
-    autopay_total:        mrr,
-    active_count,
-    cancelled_count,
-    first_visit_count,
-    first_time_visitors,
-    no_show_count,
-    no_return_members,
-    new_founder_members,
-    cancelled_members,
-    class_data,
-    health_summary,
-    avg_founder_visits,
-    founder_classes,
-    instructor_data,
-    peak_times,
-    peak_days,
-    browser_dorian,
-  };
-}
-
-
-// ─── Process & save ───────────────────────────────────────────────
-async function processFiles() {
-  const allReady = EXPECTED.every(e => state.fileMap[e.key]?.status === 'ok');
-  if (!allReady) { alert('Please upload all 12 CSV files first.'); return; }
-
-  state.processing = true;
-  state.error = null;
-  render();
-
-  try {
-    const browserData = aggregateData();
-
-    const res = await fetch('/api/process', {
-      method:  'POST',
-      headers: {'Content-Type':'application/json'},
-      body:    JSON.stringify(browserData)
-    });
-    const result = await res.json();
-
-    if (!result.ok) throw new Error(result.error || 'Process failed');
-
-    const current = result.current;
-    current.health_summary      = browserData.health_summary;
-    current.avg_founder_visits  = browserData.avg_founder_visits;
-    current.founder_classes     = browserData.founder_classes;
-    current.instructor_data     = browserData.instructor_data;
-    current.peak_times          = browserData.peak_times;
-    current.peak_days           = browserData.peak_days;
-    current.new_founder_members = browserData.new_founder_members;
-    current.first_time_visitors = browserData.first_time_visitors;
-    current.class_data          = browserData.class_data;
-    current.dorian              = browserData.browser_dorian;
-
-    await fetch('/api/save', {
-      method:  'POST',
-      headers: {'Content-Type':'application/json'},
-      body:    JSON.stringify({ week_of: current.week_of, data: current })
-    });
-
-    state.allWeeksData = state.allWeeksData.filter(w => w.week_of !== current.week_of);
-    state.allWeeksData.push(current);
-    state.allWeeksData.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
-    state.weeks        = state.allWeeksData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
-    state.selectedWeek = current.week_of;
-    const newIdx       = state.allWeeksData.findIndex(w => w.week_of === current.week_of);
-    const newPrevious  = newIdx > 0 ? state.allWeeksData[newIdx - 1] : null;
-    state.dashData     = { current, previous: newPrevious };
-
-    state.processing = false;
-    state.view = 'dashboard';
-
-  } catch(err) {
-    state.processing = false;
-    state.error = err.message;
-    state.view  = 'upload';
-  }
-
-  render();
-}
-
-
-// ─── Trends tab ───────────────────────────────────────────────────
-function renderTrends() {
-  const weeks = state.allWeeksData;
-  const n     = weeks.length;
-
-  if (n < 2) {
-    return '<div style="text-align:center;padding:60px 20px"><div style="font-size:14px;color:var(--ink-3)">Only ' + n + ' week' + (n===1?' of':'s of') + ' data so far. Upload more weeks to see trends.</div></div>';
-  }
-
-  const sorted = [...weeks].sort((a,b) => new Date(a.week_of) - new Date(b.week_of));
-  const first  = sorted[0];
-  const latest = sorted[n-1];
-  const ti     = latest.trends_intelligence || {};
-
-  // ── Computed metrics ──
-  const avgNetGrowth      = sorted.reduce((s,w) => s + (w.membership?.net_growth||0), 0) / n;
-  const remaining         = 800 - (latest.membership?.active_count || 0);
-  const weeksTo800        = avgNetGrowth > 0 ? Math.ceil(remaining / avgNetGrowth) : null;
-  const monthsTo800       = weeksTo800 ? Math.round(weeksTo800 / 4.3 * 10) / 10 : null;
-
-  const churnByWeek       = sorted.map(w => w.membership?.churned_this_week || 0);
-  const churnTrend        = churnByWeek.length >= 2
-    ? (churnByWeek[churnByWeek.length-1] > churnByWeek[churnByWeek.length-2] ? 'up' : churnByWeek[churnByWeek.length-1] < churnByWeek[churnByWeek.length-2] ? 'down' : 'flat')
-    : 'flat';
-
-  const visitsByWeek      = sorted.map(w => w.avg_founder_visits || 0);
-  const visitsTrend       = visitsByWeek.length >= 2
-    ? (visitsByWeek[visitsByWeek.length-1] > visitsByWeek[visitsByWeek.length-2] ? 'up' : visitsByWeek[visitsByWeek.length-1] < visitsByWeek[visitsByWeek.length-2] ? 'down' : 'flat')
-    : 'flat';
-
-  const netMRRByWeek = sorted.map(w => {
-    const gained = (w.membership?.new_this_week || 0) * 199;
-    const lost   = (w.membership?.churned_this_week || 0) * 199;
-    return { week_of: w.week_of, gained, lost, net: gained - lost };
-  });
-
-  const trendCard = (label, value, sub, color) =>
-    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">' +
-      '<div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">' + label + '</div>' +
-      '<div style="font-family:var(--display);font-size:26px;color:' + (color||'var(--ink)') + ';line-height:1.1">' + value + '</div>' +
-      '<div style="font-size:11px;color:var(--ink-3);margin-top:5px">' + sub + '</div>' +
-    '</div>';
-
-  const trendArrow = (t) => t === 'up' ? '↑' : t === 'down' ? '↓' : '→';
-  const trendColor = (t, goodDir) => {
-    if (t === 'flat') return 'var(--ink-3)';
-    return t === goodDir ? 'var(--green)' : 'var(--red)';
-  };
-
-  // ── AI trend actions block ──
-  const trendActionsBlock = ti.trend_actions && ti.trend_actions.length ? `
-    <div style="background:var(--ink);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px">
-      <div style="font-size:10px;font-weight:600;letter-spacing:0.14em;color:rgba(255,255,255,0.35);text-transform:uppercase;margin-bottom:10px">TREND-BASED ACTIONS · WEEK OF ${latest.week_of}</div>
-      ${ti.trend_summary ? '<div style="font-size:14px;color:rgba(255,255,255,0.75);line-height:1.7;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:14px">' + ti.trend_summary + '</div>' : ''}
-      <div style="display:flex;flex-direction:column;gap:14px">
-        ${ti.trend_actions.map(a => {
-          const isUrgent = (a.label||'').toUpperCase().includes('URGENT');
-          const isMonth  = (a.label||'').toUpperCase().includes('MONTH');
-          const color    = isUrgent ? 'var(--red)' : isMonth ? 'var(--amber)' : 'var(--green)';
-          return '<div style="display:flex;gap:14px;align-items:flex-start">' +
-            '<div style="padding:3px 8px;border-radius:4px;background:' + color + ';color:#fff;font-size:10px;font-weight:700;white-space:nowrap;flex-shrink:0;margin-top:2px">' + (a.label||'ACTION') + '</div>' +
-            '<div style="font-size:14px;color:#fff;line-height:1.6">' + (a.action||'') + '</div>' +
-          '</div>';
-        }).join('')}
-      </div>
-    </div>` : '';
-
-  // ── Projection card ──
-  const projectionBlock = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px;box-shadow:var(--shadow)">
-      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Projection to 800 Founder Members</div>
-      <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px;flex-wrap:wrap">
-        <div style="font-family:var(--display);font-size:32px;color:${weeksTo800 ? 'var(--green)' : 'var(--red)'}">${weeksTo800 ? monthsTo800 + ' months' : 'Not on track'}</div>
-        <div style="font-size:13px;color:var(--ink-3)">${weeksTo800 ? '~' + weeksTo800 + ' weeks at current pace' : 'Net growth is negative — address churn first'}</div>
-      </div>
-      <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:10px">
-        <div style="height:100%;background:var(--green);border-radius:4px;width:${Math.min((latest.membership?.active_count||0)/800*100,100)}%;transition:width 0.6s ease"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3)">
-        <span>${latest.membership?.active_count||0} members now</span>
-        <span>${800-(latest.membership?.active_count||0)} to go · avg ${avgNetGrowth > 0 ? '+' : ''}${Math.round(avgNetGrowth*10)/10} net/week</span>
-      </div>
-      ${ti.projection ? '<div style="margin-top:12px;padding:10px 12px;background:var(--green-light);border-radius:var(--radius);font-size:13px;color:var(--green)">' + ti.projection + '</div>' : ''}
-    </div>`;
-
-  // ── Churn & engagement signals ──
-  const signalsBlock = `
-    <div class="g2" style="margin-bottom:20px">
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:10px">Churn Trend</div>
-        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
-          <span style="font-family:var(--display);font-size:26px;color:${trendColor(churnTrend,'down')}">${trendArrow(churnTrend)}</span>
-          <span style="font-size:13px;color:var(--ink-2)">${churnTrend === 'up' ? 'Accelerating' : churnTrend === 'down' ? 'Improving' : 'Stable'}</span>
-        </div>
-        <div style="display:flex;gap:6px;align-items:flex-end;height:40px;margin-bottom:8px">
-          ${churnByWeek.map((v,i) => {
-            const maxC = Math.max(...churnByWeek) || 1;
-            const h = Math.max(Math.round(v/maxC*100),4);
-            const isLast = i === churnByWeek.length - 1;
-            return '<div style="flex:1;background:' + (isLast ? 'var(--red)' : 'var(--border)') + ';border-radius:2px;height:' + h + '%;align-self:flex-end" title="' + v + ' churned"></div>';
-          }).join('')}
-        </div>
-        <div style="font-size:11px;color:var(--ink-3)">${churnByWeek.join(' → ')} cancellations per week</div>
-        ${ti.churn_diagnosis ? '<div style="margin-top:10px;font-size:12px;color:var(--ink-2);line-height:1.6;border-top:1px solid var(--border);padding-top:10px">' + ti.churn_diagnosis + '</div>' : ''}
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">
-        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:10px">Engagement Signal <span style="font-weight:400;color:var(--ink-3)">(leads churn by 2–3 wks)</span></div>
-        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
-          <span style="font-family:var(--display);font-size:26px;color:${trendColor(visitsTrend,'up')}">${trendArrow(visitsTrend)}</span>
-          <span style="font-size:13px;color:var(--ink-2)">${visitsTrend === 'up' ? 'Improving' : visitsTrend === 'down' ? 'Dropping — watch for churn' : 'Stable'}</span>
-        </div>
-        <div style="display:flex;gap:6px;align-items:flex-end;height:40px;margin-bottom:8px">
-          ${visitsByWeek.map((v,i) => {
-            const maxV = Math.max(...visitsByWeek) || 1;
-            const h = Math.max(Math.round(v/maxV*100),4);
-            const isLast = i === visitsByWeek.length - 1;
-            const col = v >= 3 ? 'var(--green)' : v >= 2 ? 'var(--amber)' : 'var(--red)';
-            return '<div style="flex:1;background:' + (isLast ? col : 'var(--border)') + ';border-radius:2px;height:' + h + '%;align-self:flex-end" title="' + v + '/wk"></div>';
-          }).join('')}
-        </div>
-        <div style="font-size:11px;color:var(--ink-3)">${visitsByWeek.map(v=>v+'/wk').join(' → ')} avg visits per member</div>
-        ${ti.engagement_signal ? '<div style="margin-top:10px;font-size:12px;color:var(--ink-2);line-height:1.6;border-top:1px solid var(--border);padding-top:10px">' + ti.engagement_signal + '</div>' : ''}
-      </div>
-    </div>`;
-
-  // ── Net MRR movement ──
-  const netMRRBlock = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px;box-shadow:var(--shadow)">
-      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Net MRR Movement — New Member Revenue vs Churn Loss</div>
-      ${netMRRByWeek.map((w,i) => {
-        const isLast = i === netMRRByWeek.length - 1;
-        return '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:' + (isLast?'10px 12px':'6px 0') + ';background:' + (isLast?'var(--green-light)':'transparent') + ';border-radius:' + (isLast?'var(--radius)':'0') + '">' +
-          '<div style="font-family:var(--mono);font-size:11px;color:var(--ink-3);width:80px;flex-shrink:0">' + w.week_of + '</div>' +
-          '<div style="flex:1;display:flex;gap:4px;align-items:center">' +
-            '<span style="font-size:12px;color:var(--green);font-weight:500">+' + fmtC(w.gained) + '</span>' +
-            '<span style="font-size:11px;color:var(--ink-3)">gained</span>' +
-            '<span style="font-size:11px;color:var(--ink-3);margin:0 4px">·</span>' +
-            '<span style="font-size:12px;color:var(--red);font-weight:500">−' + fmtC(w.lost) + '</span>' +
-            '<span style="font-size:11px;color:var(--ink-3)">lost</span>' +
-          '</div>' +
-          '<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:' + (w.net>=0?'var(--green)':'var(--red)') + ';flex-shrink:0">' + (w.net>=0?'+':'') + fmtC(w.net) + '</div>' +
-        '</div>';
-      }).join('')}
-    </div>`;
-
-  // ── Week by week table ──
-  const tableBlock = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
-      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Week by Week</div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead>
-            <tr style="border-bottom:2px solid var(--border)">
-              <th style="text-align:left;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">Week</th>
-              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">Members</th>
-              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">New</th>
-              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">Churned</th>
-              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">Net</th>
-              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">MRR</th>
-              <th style="text-align:right;padding:8px 10px;font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;white-space:nowrap">Avg Visits</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${sorted.map((w,i) => {
-              const isLatest = i === sorted.length - 1;
-              const net = w.membership?.net_growth || 0;
-              return '<tr style="border-bottom:1px solid var(--border);background:' + (isLatest ? 'var(--green-light)' : 'transparent') + '">' +
-                '<td style="padding:9px 10px;font-weight:' + (isLatest?'600':'400') + ';color:var(--ink);white-space:nowrap">' + w.week_of + (isLatest?' ★':'') + '</td>' +
-                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:var(--ink)">' + (w.membership?.active_count||'—') + '</td>' +
-                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:var(--green)">+' + (w.membership?.new_this_week||0) + '</td>' +
-                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:' + ((w.membership?.churned_this_week||0)>0?'var(--red)':'var(--ink-3)') + '">' + (w.membership?.churned_this_week||0) + '</td>' +
-                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:' + (net>0?'var(--green)':net<0?'var(--red)':'var(--ink-3)') + '">' + (net>0?'+':'') + net + '</td>' +
-                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:var(--green)">' + fmtC(w.revenue?.mrr||0) + '</td>' +
-                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:' + ((w.avg_founder_visits||0)>=3?'var(--green)':'var(--amber)') + '">' + (w.avg_founder_visits||0) + '/wk</td>' +
-              '</tr>';
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>`;
-
-  return `
-    <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:20px">${n} weeks of data · ${first.week_of} → ${latest.week_of}</div>
-    ${trendActionsBlock}
-    ${projectionBlock}
-    ${signalsBlock}
-    ${netMRRBlock}
-    ${tableBlock}`;
-}
-
-// ─── Switch week ─────────────────────────────────────────────────
-function switchWeek(weekOf) {
-  if (state.selectedWeek === weekOf) return;
-  const cached = state.allWeeksData.find(w => w.week_of === weekOf);
-  if (!cached) return;
-  const prevIdx = state.allWeeksData.findIndex(w => w.week_of === weekOf) - 1;
-  const previous = prevIdx >= 0 ? state.allWeeksData[prevIdx] : null;
-  state.dashData     = { current: cached, previous };
-  state.selectedWeek = weekOf;
-  state.tab          = 'overview';
-  render();
-}
-
-// ─── Init ─────────────────────────────────────────────────────────
-async function init() {
-  state.view = 'loading';
-  render();
-
-  try {
-    const latestResult = await fetch('/api/read?action=read_latest').then(r => r.json());
-
-    if (!latestResult.ok || !latestResult.current) {
-      state.view = 'empty';
-      render();
-      return;
+      result = JSON.parse(text.substring(startIdx, endIdx + 1));
+    } catch(parseErr) {
+      return res.status(500).json({ error: 'JSON parse failed: ' + parseErr.message, raw: text.substring(0, 500) });
     }
 
-    const allData0 = [];
-    if (latestResult.previous) allData0.push(latestResult.previous);
-    allData0.push(latestResult.current);
-    allData0.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
-    const latest  = allData0[allData0.length - 1];
-    const prevOne = allData0.length > 1 ? allData0[allData0.length - 2] : null;
+    result.week_of     = data.week_of;
+    result.uploaded_at = new Date().toISOString();
 
-    state.allWeeksData = allData0;
-    state.weeks        = allData0.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
-    state.dashData     = { current: latest, previous: prevOne };
-    state.selectedWeek = latest.week_of;
-    state.view         = 'dashboard';
-    render();
+    return res.status(200).json({ ok: true, current: result, previous });
 
-    try {
-      const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
-      const weeks = (weeksData.weeks || []).sort((a,b) => a.week_of > b.week_of ? 1 : -1);
-      const allData = [];
-      for (const w of weeks) {
-        try {
-          const r = await fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(w.week_of)).then(r => r.json());
-          if (r.ok && r.current) allData.push(r.current);
-        } catch {}
-      }
-      if (allData.length) {
-        allData.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
-        state.allWeeksData = allData;
-        state.weeks        = allData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
-        const trueLatest = allData[allData.length - 1];
-        const trueIdx    = allData.length - 1;
-        state.dashData   = { current: trueLatest, previous: trueIdx > 0 ? allData[trueIdx-1] : null };
-        state.selectedWeek = trueLatest.week_of;
-        render();
-      }
-    } catch {}
-
-  } catch(e) {
-    state.view = 'empty';
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
-
-  render();
 }
 
-init();
-</script>
-</body>
-</html>
+function buildPrompt(data, history) {
+  const today = new Date().toISOString().split('T')[0];
+  const hasHistory = history && history.length > 0;
+
+  return `You are the business intelligence engine for Prana Wellness Club, a boutique fitness studio in Austin, Texas.
+
+ABOUT PRANA:
+- Target: 800 Founder Members at full capacity
+- Services: Pilates Reformer, Heated Sculpt, Heated Mat Pilates, Prana Vinyasa Flow, Yin, Private
+- Revenue model: MRR = active_count × $199/month always. This is the only MRR formula.
+- Key staff: Dorian owns Founder Member retention and outreach
+- MRR target: >70% of total revenue should be Founder Member autopay
+- CRITICAL: Only reference Founder Members in all analysis. Never mention ClassPass, Friends and Family, or drop-ins except as an acquisition opportunity in bright_spot only.
+- Reformer Pilates is NOT included in any Founder Membership — it is a separate paid service.
+- Founder Membership (Unlimited) covers: Yoga, Sculpt, Mat Pilates, Vinyasa, Yin
+
+IMPORTANT DATA NOTES:
+- autopay_total = active_count × $199 (MRR — always use this formula)
+- sales_total = weekly non-recurring sales (secondary metric)
+- active_count = Founder Members only
+- new_this_week = Founder Members who joined THIS WEEK ONLY (not cumulative)
+- cancelled_count = Founder Members who cancelled THIS WEEK ONLY (not cumulative)
+- avg_founder_visits = average visits per Founder Member this week. Target is 3+/week.
+- health_summary = {green: 3+visits/month, amber: 1-2 visits/month, red: 0 visits or 21+ days absent}
+
+CALCULATION RULES:
+- mrr = autopay_total (= active_count × $199)
+- pack_and_class = sales_total
+- mrr_pct = round(mrr / (mrr + sales_total) * 100)
+- revenue_per_member = round(mrr / active_count)
+- net_growth = new_this_week minus cancelled_count (BOTH are this-week-only figures)
+- churned_this_week = cancelled_count (this week only)
+- churn_rate_pct = round(cancelled_count / active_count * 100, 1)
+- progress_to_800_pct = round(active_count / 800 * 100)
+- Today is ${today}
+- critical = members with 0 visits in past 14-29 days, MAX 10
+- watch = members with 1-2 visits/month (amber health), MAX 10
+- lost = members with 0 visits for 30+ days, MAX 10
+- win_back = cancelled_members list as-is
+- total_visits = sum of all visits in class_data
+- no_show_rate_pct = round(no_show_count / total_visits * 100)
+- top_classes = top 3 by visits descending
+- bottom_classes = bottom 3 by visits ascending, exclude 0 visits
+
+${data.previous_week ? `PREVIOUS WEEK DATA (use for trajectory analysis):
+${JSON.stringify(data.previous_week)}` : 'No previous week data — this is the first upload.'}
+
+WEEKLY DATA:
+${JSON.stringify(data)}
+
+${hasHistory ? `HISTORICAL TREND DATA (${history.length} previous weeks, oldest first):
+${JSON.stringify(history)}` : 'No historical trend data available yet.'}
+
+INTELLIGENCE — CEO LEVEL. Qualitative AND quantitative. Only reference Founder Members.
+
+headline: One punchy sentence with the most important business reality. If previous week exists, reference trajectory.
+
+insight: 2-3 sentences comparing trajectory — members, MRR, churn, visits this week vs last week.
+
+actions: Exactly 3 actions. Mix of STRATEGIC (CEO decides) and DELEGATION (CEO assigns to team).
+- Do NOT name individual members in actions
+- Mix 1-2 strategic + 1-2 delegation per response
+
+risk: The single most urgent CEO-level threat with specific numbers.
+
+bright_spot: One specific metric or pattern that is working. Be concrete with numbers.
+
+TRENDS INTELLIGENCE — populate based on ${hasHistory ? history.length + ' weeks of history plus this week' : 'this week only (note limited data)'}:
+
+trend_summary: 2 sentences. What is the single most important multi-week pattern? Is the business accelerating, stalling, or declining? Be direct.
+
+churn_diagnosis: 1-2 sentences. Is churn accelerating, stable, or improving? What does the pattern suggest — onboarding failure, engagement drop, or external?
+
+engagement_signal: 1-2 sentences. Is avg_visits/member trending up or down? Flag if it is dropping as a leading indicator of upcoming churn.
+
+projection: Based on average weekly net_growth across all available weeks, state plainly: "At current pace (+X net/week avg), you reach 800 in Y weeks (~Z months)." If net growth is negative, state how long until membership drops to a critical threshold instead.
+
+trend_actions: Exactly 3 tactical actions driven by the multi-week patterns. Each must reference a specific number from the trend data. Label each as URGENT, THIS WEEK, or THIS MONTH.
+
+RETURN ONLY THIS JSON, NOTHING ELSE:
+{"revenue":{"total_weekly":0,"mrr":0,"mrr_pct":0,"pack_and_class":0,"revenue_per_member":0},"membership":{"active_count":0,"new_this_week":0,"churned_this_week":0,"net_growth":0,"churn_rate_pct":0,"retention_rate_pct":0,"progress_to_800_pct":0},"attendance":{"avg_fill_rate_pct":0,"total_visits":0,"no_show_rate_pct":0,"top_classes":[{"name":"","visits":0,"fill_rate_pct":0}],"bottom_classes":[{"name":"","visits":0,"fill_rate_pct":0}]},"dorian":{"critical":[],"watch":[],"lost":[],"win_back":[]},"intelligence":{"headline":"","insight":"","actions":["","",""],"risk":"","bright_spot":""},"trends_intelligence":{"trend_summary":"","churn_diagnosis":"","engagement_signal":"","projection":"","trend_actions":[{"label":"","action":""},{"label":"","action":""},{"label":"","action":""}]},"warnings":[]}`;
+}
