@@ -4,6 +4,29 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Prana Wellness — CEO Dashboard</title>
+<!--
+═══════════════════════════════════════════════════════════════════
+  CHANGELOG (2026-04-27)
+  ────────────────────────────────────────────────────────────────
+  1. Active Founder source standardised to 07_retention_management
+     filtered to Status=Active AND Membership Type contains 'Founder'.
+     03_members_active.csv is no longer used for headcount.
+  2. MRR now = active_count × $200 (was $199).
+  3. Pack & Class Sales (sales_total) now SUMS 01_sales Item Total
+     ONLY for rows where Item name does NOT contain "Founder".
+     Prevents double-counting Founder Membership purchases in MRR.
+  4. Weekly Sales redefined = MRR + non-autopay (total weekly revenue).
+  5. MRR Stability copy fixed — celebrates ≥70% as target met.
+  6. Revenue/Member redefined = total weekly revenue ÷ active members.
+  7. Class avg copy now uses avg_per_session, not "of 98".
+  8. NEW: Payment Issues card on Members tab — Founder Members with
+     failed/declined/suspended autopay this week.
+  9. NEW: Dorian's working list rebuilt with priority order:
+     At Risk (amber) → Urgent (red) → New this week.
+     Each row shows phone, email, last visit, days since join,
+     and a suggested action.
+═══════════════════════════════════════════════════════════════════
+-->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -30,7 +53,6 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .fu2{animation:fadeUp 0.4s 0.06s ease both}
 .fu3{animation:fadeUp 0.4s 0.12s ease both}
 
-/* ── Layout ── */
 .page{max-width:660px;margin:0 auto;padding:32px 16px 80px}
 .header{display:flex;align-items:center;gap:14px;margin-bottom:40px}
 .logo{width:44px;height:44px;border-radius:10px;background:var(--green);color:#fff;font-family:var(--display);font-size:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -39,7 +61,6 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;margin-bottom:16px;box-shadow:var(--shadow)}
 .card-label{font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px}
 
-/* ── Empty state ── */
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:64px 32px;text-align:center}
 .empty-icon{width:56px;height:56px;border-radius:14px;background:var(--green-light);display:flex;align-items:center;justify-content:center;margin-bottom:4px}
 .empty-title{font-family:var(--display);font-size:22px;color:var(--ink)}
@@ -49,7 +70,6 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .btn-secondary{padding:9px 18px;background:transparent;color:var(--ink-2);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;font-family:var(--body);transition:border-color 0.15s}
 .btn-secondary:hover{border-color:var(--ink-3)}
 
-/* ── Drop zone ── */
 .drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:36px 24px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg)}
 .drop-zone.active{border-color:var(--green);background:var(--green-light)}
 .drop-zone.done{border-color:var(--green);border-style:solid;background:var(--green-light);cursor:default}
@@ -60,16 +80,13 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .done-title{font-weight:600;font-size:16px;color:var(--green)}
 .done-sub{font-size:13px;color:var(--ink-3)}
 
-/* ── Progress ── */
 .progress-wrap{display:flex;align-items:center;gap:12px;margin-top:16px}
 .progress-track{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
 .progress-fill{height:100%;background:var(--green);border-radius:2px;transition:width 0.4s ease}
 .progress-label{font-family:var(--mono);font-size:12px;color:var(--ink-3);white-space:nowrap}
 
-/* ── Spinner ── */
 .spinner{width:20px;height:20px;border:2.5px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0}
 
-/* ── File rows ── */
 .file-grid{display:flex;flex-direction:column;gap:3px}
 .file-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;transition:background 0.15s}
 .file-row.ok{background:var(--green-light)}
@@ -80,29 +97,24 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .file-rows{font-family:var(--mono);font-size:11px;color:var(--green);margin-left:4px}
 .file-err{font-family:var(--mono);font-size:11px;color:var(--red)}
 
-/* ── Warning box ── */
 .warn-box{background:var(--amber-light);border:1px solid var(--amber);border-radius:var(--radius);padding:14px 18px;margin-bottom:14px}
 .warn-title{font-weight:600;font-size:13px;color:var(--amber);margin-bottom:6px}
 .warn-file{font-family:var(--mono);font-size:12px;color:var(--ink-2);margin-bottom:2px}
 .warn-hint{font-size:12px;color:var(--ink-3);margin-top:6px}
 
-/* ── Processing overlay ── */
 .processing{display:flex;flex-direction:column;align-items:center;gap:14px;padding:48px 24px;text-align:center}
 .processing-title{font-family:var(--display);font-size:20px;color:var(--ink)}
 .processing-sub{font-size:13px;color:var(--ink-3)}
 .processing-spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 0.9s linear infinite}
 
-/* ── Dashboard placeholder ── */
 .dash-header{display:flex;align-items:center;gap:14px;margin-bottom:40px;padding-bottom:24px;border-bottom:1px solid var(--border)}
 .dash-actions{margin-left:auto;display:flex;gap:10px;align-items:center}
 .week-select{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--ink-2);background:var(--surface);font-family:var(--body);cursor:pointer}
 
-/* ── Responsive grid helpers ── */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 
-/* ── Mobile ── */
 @media(max-width:700px){
   .g2,.g3,.g4{grid-template-columns:1fr 1fr}
   .g4-to-1{grid-template-columns:1fr}
@@ -114,7 +126,6 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
   .chat-chip{font-size:11px;padding:5px 10px}
 }
 
-/* ── Dashboard header mobile ── */
 .dash-header-wrap{display:flex;align-items:center;gap:12px;margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
 .dash-header-left{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
 .dash-header-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
@@ -123,18 +134,14 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
   .dash-header-actions .btn-secondary{display:none}
 }
 
-/* ── Tab nav mobile ── */
 .tab-nav{display:flex;gap:2px;background:var(--surface-2);border-radius:10px;padding:4px;margin-bottom:24px;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .tab-nav::-webkit-scrollbar{display:none}
 .tab-btn{flex:1;min-width:72px;padding:9px 8px;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-family:var(--body);transition:all 0.15s;white-space:nowrap;touch-action:manipulation}
 
-/* ── Dorian cards mobile ── */
 @media(max-width:600px){
   .dorian-card{flex-direction:column;gap:6px}
   .dorian-meta{flex-direction:column;gap:4px}
 }
-
-/* ── Intelligence card mobile ── */
 @media(max-width:600px){
   .intel-headline{font-size:17px !important}
   .action-grid{flex-direction:column}
@@ -162,6 +169,9 @@ const EXPECTED = [
 ];
 const GROUPS = ['Revenue','Membership','Attendance'];
 
+// MRR is locked to $200 per Founder Member per month.
+const FOUNDER_PRICE = 200;
+
 // ─── State ────────────────────────────────────────────────────────
 let state = {
   view: 'loading',
@@ -187,7 +197,6 @@ function render() {
   bindEvents();
 }
 
-// ─── Loading ──────────────────────────────────────────────────────
 function renderLoading() {
   return `
   <div class="page fu" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px">
@@ -197,7 +206,6 @@ function renderLoading() {
   </div>`;
 }
 
-// ─── Empty state ──────────────────────────────────────────────────
 function renderEmpty() {
   return `
   <div class="page fu">
@@ -218,7 +226,6 @@ function renderEmpty() {
   </div>`;
 }
 
-// ─── Upload screen ────────────────────────────────────────────────
 function renderUpload() {
   const loaded   = EXPECTED.filter(e => state.fileMap[e.key]?.status === 'ok').length;
   const allReady = loaded === 12;
@@ -251,11 +258,9 @@ function renderUpload() {
       <button class="btn-secondary" onclick="${state.dashData ? 'showDashboard()' : 'showEmpty()'}">← Back</button>
     </div>
 
-    <!-- Drop zone -->
     <div class="card">
       <div class="card-label">Drop files here</div>
-      <div class="drop-zone ${allReady ? 'done' : state.dragging ? 'active' : ''}"
-           id="dropZone">
+      <div class="drop-zone ${allReady ? 'done' : state.dragging ? 'active' : ''}" id="dropZone">
         <input type="file" id="fileInput" multiple accept=".csv" style="display:none">
         ${allReady ? `
           <div class="done-icon">✓</div>
@@ -273,7 +278,6 @@ function renderUpload() {
         `}
       </div>
 
-      <!-- Progress bar -->
       <div class="progress-wrap">
         <div class="progress-track">
           <div class="progress-fill" style="width:${(loaded/12)*100}%"></div>
@@ -281,11 +285,9 @@ function renderUpload() {
         <div class="progress-label">${loaded} / 12</div>
       </div>
 
-      <!-- Process button -->
       ${allReady ? '<button id="processBtn" class="btn-primary" style="width:100%;margin-top:16px">Save &amp; Build Dashboard</button>' : ''}
     </div>
 
-    <!-- Warnings -->
     ${unknown.length > 0 ? `
       <div class="warn-box">
         <div class="warn-title">⚠ Unrecognised files — not loaded</div>
@@ -301,7 +303,6 @@ function renderUpload() {
       </div>
     ` : ''}
 
-    <!-- File groups -->
     ${GROUPS.map(group => `
       <div class="card">
         <div class="card-label">${group}</div>
@@ -342,15 +343,6 @@ function metricCard(label, value, sub, accentColor) {
     ${sub ? `<div style="font-size:12px;color:var(--ink-3);margin-top:6px">${sub}</div>` : ''}
   </div>`;
 }
-function sectionHeader(title, sub) {
-  return `<div style="margin-bottom:20px">
-    <div style="font-family:var(--display);font-size:22px;color:var(--ink)">${title}</div>
-    ${sub ? `<div style="font-size:13px;color:var(--ink-3);margin-top:3px">${sub}</div>` : ''}
-  </div>`;
-}
-function divider() {
-  return `<div style="height:1px;background:var(--border);margin:40px 0"></div>`;
-}
 function downloadCSV(rows, filename) {
   if (!rows || !rows.length) return;
   const headers = Object.keys(rows[0]);
@@ -375,7 +367,7 @@ function renderDashboard() {
   const tab    = state.tab       || 'overview';
 
   const newFounders   = c.new_founder_members || [];
-  const atRiskCount   = (dorian.critical||[]).length + (dorian.watch||[]).length + (dorian.lost||[]).length + (dorian.never_visited||[]).length;
+  const failed        = c.failed_payments || [];
   const founderVisits = (c.founder_classes||[]).reduce((s,cl)=>s+(cl.founder_visits||0),0);
 
   const wow = (curr, prev, isC) => {
@@ -414,7 +406,7 @@ function renderDashboard() {
   // ─── TAB: OVERVIEW ──────────────────────────────────────────────
   const tabOverview = `
     <div class="g3" style="margin-bottom:20px">
-      ${pulse('MRR', fmtC(r.mrr), 'Monthly recurring revenue', 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
+      ${pulse('MRR', fmtC(r.mrr), (m.active_count||0) + ' members × $' + FOUNDER_PRICE, 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
       ${pulse('Founder Members', m.active_count||'—', (800-(m.active_count||0))+' to full capacity', 'var(--ink)', wow(m.active_count, p?.membership?.active_count, false))}
       ${pulse('Net Growth', (m.net_growth>0?'+':'')+m.net_growth, (m.new_this_week||0)+' joined · '+(m.churned_this_week||0)+' churned', (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
       ${pulse('Member Health', hs.green||0, '<span style="color:var(--amber)">●'+(hs.amber||0)+' at risk</span> &nbsp;<span style="color:var(--red)">●'+(hs.red||0)+' urgent</span>', 'var(--green)')}
@@ -422,7 +414,6 @@ function renderDashboard() {
       ${pulse('Forecasted ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
     </div>
 
-    <!-- Progress bar -->
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:24px;box-shadow:var(--shadow)">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px">
         <div style="font-size:12px;font-weight:500;color:var(--ink-2)">Progress to 800 Founder Members</div>
@@ -433,14 +424,12 @@ function renderDashboard() {
       </div>
     </div>
 
-    <!-- Intelligence -->
     <div style="background:var(--ink);border-radius:var(--radius-lg);padding:20px;margin-bottom:12px">
       <div style="font-size:10px;font-weight:600;letter-spacing:0.14em;color:rgba(255,255,255,0.35);text-transform:uppercase;margin-bottom:10px">CEO BRIEFING · WEEK OF ${c.week_of||''}</div>
       <div style="font-family:var(--display);font-size:20px;color:#fff;line-height:1.5;margin-bottom:12px" class="intel-headline">${intel.headline||'—'}</div>
       ${intel.insight ? `<div style="font-size:14px;color:rgba(255,255,255,0.8);line-height:1.7;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px">${intel.insight}</div>` : ''}
     </div>
 
-    <!-- Risk + Bright spot -->
     <div class="g2" style="margin-bottom:12px">
       <div style="background:var(--red-light);border:1px solid var(--red);border-radius:var(--radius-lg);padding:18px 20px">
         <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--red);text-transform:uppercase;margin-bottom:8px">⚠ Risk</div>
@@ -452,7 +441,6 @@ function renderDashboard() {
       </div>
     </div>
 
-    <!-- Actions -->
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px 24px;box-shadow:var(--shadow)">
       <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Strategic Actions & Delegation</div>
       <div style="display:flex;flex-direction:column;gap:14px">
@@ -480,44 +468,52 @@ function renderDashboard() {
 
     ${renderHealthSummary(c)}
 
+    ${renderPaymentIssuesCard(failed)}
+
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;margin-top:24px">
       <div>
         <div style="font-size:15px;font-weight:600;color:var(--ink)">Dorian's Action List</div>
-        <div style="font-size:12px;color:var(--ink-3);margin-top:2px">${atRiskCount} members to contact · ${newFounders.length} new members need follow-up</div>
+        <div style="font-size:12px;color:var(--ink-3);margin-top:2px">Priority order: At Risk → Urgent → New This Week</div>
       </div>
       <button class="btn-primary" onclick="handleDorianDownload()">⬇ Download CSV</button>
     </div>
     ${renderDorianList(dorian, newFounders)}`;
 
   // ─── TAB: REVENUE ────────────────────────────────────────────────
+  // FIX 4: Weekly Sales = total weekly revenue (MRR + non-autopay)
+  // FIX 6: Revenue/Member = total weekly rev ÷ active members
+  const totalWeekly = (r.total_weekly || ((r.mrr||0) + (r.pack_and_class||0)));
+  const revPerMember = (m.active_count||0) > 0 ? Math.round(totalWeekly / m.active_count) : 0;
+
   const tabRevenue = `
     <div class="g2" style="margin-bottom:16px">
-      ${pulse('MRR', fmtC(r.mrr), 'Monthly Founder Member autopay', 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
+      ${pulse('MRR', fmtC(r.mrr), (m.active_count||0) + ' Founder Members × $' + FOUNDER_PRICE, 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
       ${pulse('Forecasted ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
-      ${pulse('Revenue / Member', fmtC(r.revenue_per_member), 'MRR ÷ '+(m.active_count||0)+' members / month', 'var(--ink)')}
-      ${pulse('Weekly Sales', fmtC(r.total_weekly), 'Non-autopay revenue this week', 'var(--ink)')}
+      ${pulse('Revenue / Member', fmtC(revPerMember), 'Total weekly revenue ÷ ' + (m.active_count||0) + ' members', 'var(--ink)')}
+      ${pulse('Weekly Sales', fmtC(totalWeekly), 'MRR contribution + non-autopay this week', 'var(--ink)')}
     </div>
 
     <div class="g2">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
         <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">MRR Stability</div>
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-          <span style="font-size:13px;color:var(--ink-2)">MRR as % of total</span>
+          <span style="font-size:13px;color:var(--ink-2)">MRR as % of total revenue</span>
           <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">${r.mrr_pct||0}%</span>
         </div>
         <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:10px">
           <div style="height:100%;background:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'};border-radius:3px;width:${Math.min(r.mrr_pct||0,100)}%"></div>
         </div>
         <div style="font-size:12px;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">
-          ${(r.mrr_pct||0)>=70?'✓ MRR target met (>70%)':'Below 70% target — grow Founder Members to stabilise'}
+          ${(r.mrr_pct||0)>=70?'✓ Above 70% target — recurring revenue is healthy':'Below 70% target — grow Founder Members to stabilise'}
         </div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
         <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Pack & Class Sales</div>
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
           <span style="font-size:13px;color:var(--ink-2)">Non-autopay this week</span>
-          <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--ink)">${fmtC(r.pack_and_class||r.total_weekly)}</span>
+          <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--ink)">${fmtC(r.pack_and_class||0)}</span>
         </div>
+        <div style="font-size:11px;color:var(--ink-3);margin-bottom:8px">Drop-ins, packs, late cancel & no-show fees. Excludes Founder Membership purchases.</div>
         <div style="background:var(--amber-light);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--amber);margin-top:8px">
           ↑ Pack & class buyers are Founder Member prospects — each is a warm conversion opportunity
         </div>
@@ -531,29 +527,36 @@ function renderDashboard() {
   const allClasses = c.class_data      || [];
   const maxVisits  = allClasses.length ? allClasses[0].visits : 1;
 
-  // ── Classes: actionable insights ──
-  const avgVisitsAllClasses = allClasses.length ? Math.round(allClasses.reduce((s,cl)=>s+cl.visits,0)/allClasses.length) : 0;
-  const underperforming = allClasses.filter(cl => cl.visits < avgVisitsAllClasses * 0.5 && cl.visits > 0);
+  // FIX 7: avg_per_session is the correct denominator, NOT total visits
+  const totalSessions  = c.total_sessions || 0;
+  const totalVisits    = a.total_visits || allClasses.reduce((s,cl)=>s+cl.visits,0);
+  const avgPerSession  = totalSessions > 0 ? Math.round(totalVisits/totalSessions*10)/10 : 0;
+
+  // Per-session attendance for each class
+  const classWithAvg = allClasses.map(cl => ({
+    ...cl,
+    sessions_count: cl.sessions_count || 1,
+    avg_per_session: cl.sessions_count > 0 ? Math.round(cl.visits/cl.sessions_count*10)/10 : cl.visits
+  }));
+
+  const underperforming = classWithAvg.filter(cl => cl.avg_per_session < avgPerSession * 0.7 && cl.visits > 0);
   const highCancelClasses = allClasses.filter(cl => cl.late_cancels >= 10).sort((a,b) => b.late_cancels - a.late_cancels);
   const topInstructor = instrData[0] || null;
   const bottomInstructor = instrData.length > 1 ? instrData[instrData.length-1] : null;
   const topTime = peakTimes[0] || null;
   const secondTime = peakTimes[1] || null;
-  // Gap time = a time slot that exists but has low volume vs top — candidate for new class
   const gapOpportunity = peakDays.length ? peakDays[peakDays.length-1] : null;
 
   const insightRows = [];
 
-  // 1. Underperforming classes
   if (underperforming.length) {
     insightRows.push({
       color: 'var(--red)', bg: 'var(--red-light)', icon: '✕',
       label: 'Consider cutting or rescheduling',
-      text: underperforming.map(cl => '<strong>' + cl.name + '</strong> (' + cl.visits + ' visits' + (cl.late_cancels > 0 ? ', ' + cl.late_cancels + ' late cancels' : '') + ')').join(', ') + ' — less than half the average class attendance of ' + avgVisitsAllClasses + '.',
+      text: underperforming.slice(0,5).map(cl => '<strong>' + cl.name + '</strong> (' + cl.avg_per_session + ' avg/session' + (cl.late_cancels > 0 ? ', ' + cl.late_cancels + ' late cancels' : '') + ')').join(', ') + ' — below studio average of ' + avgPerSession + ' attendees per session.',
     });
   }
 
-  // 2. Late cancel problem classes
   if (highCancelClasses.length) {
     insightRows.push({
       color: 'var(--amber)', bg: 'var(--amber-light)', icon: '⚠',
@@ -562,7 +565,6 @@ function renderDashboard() {
     });
   }
 
-  // 3. Instructor driving vs lagging
   if (topInstructor && bottomInstructor && topInstructor.name !== bottomInstructor.name) {
     insightRows.push({
       color: 'var(--green)', bg: 'var(--green-light)', icon: '★',
@@ -571,7 +573,6 @@ function renderDashboard() {
     });
   }
 
-  // 4. Best time to add new classes
   if (topTime && secondTime) {
     insightRows.push({
       color: 'var(--green)', bg: 'var(--green-light)', icon: '+',
@@ -580,7 +581,6 @@ function renderDashboard() {
     });
   }
 
-  // 5. Quietest day = opportunity
   if (gapOpportunity) {
     insightRows.push({
       color: 'var(--amber)', bg: 'var(--amber-light)', icon: '↑',
@@ -591,7 +591,8 @@ function renderDashboard() {
 
   const classInsightsBlock = insightRows.length ? `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)">
-      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">Class Decisions This Week</div>
+      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:6px">Class Decisions This Week</div>
+      <div style="font-size:11px;color:var(--ink-3);margin-bottom:14px">${totalSessions} sessions · ${totalVisits.toLocaleString()} total check-ins · ${avgPerSession} avg per session</div>
       <div style="display:flex;flex-direction:column;gap:12px">
         ${insightRows.map(row => `
           <div style="display:flex;gap:14px;align-items:flex-start;padding:14px;background:${row.bg};border-radius:var(--radius);border-left:3px solid ${row.color}">
@@ -607,7 +608,7 @@ function renderDashboard() {
   const tabClasses = `
     ${classInsightsBlock}
     <div class="g4" style="margin-bottom:16px">
-      ${pulse('Total Check-ins', (a.total_visits||0).toLocaleString(), 'All visitors this week', 'var(--ink)')}
+      ${pulse('Total Check-ins', totalVisits.toLocaleString(), totalSessions + ' sessions · ' + avgPerSession + ' avg/session', 'var(--ink)')}
       ${pulse('Founder Visits', founderVisits, (c.avg_founder_visits||0)+' avg / member', (c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)')}
       ${pulse('Late Cancels', fmtPct(a.no_show_rate_pct||0), 'Of all bookings', (a.no_show_rate_pct||0)>10?'var(--amber)':'var(--ink)')}
       ${pulse('First-Time Visitors', c.first_time_visitors||0, 'Acquisition pipeline', 'var(--green)')}
@@ -615,7 +616,7 @@ function renderDashboard() {
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:12px;box-shadow:var(--shadow)">
       <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">All Classes This Week</div>
-      ${allClasses.slice(0,8).map((cl,i) => {
+      ${classWithAvg.slice(0,8).map((cl,i) => {
         const barW = Math.round(cl.visits/maxVisits*100);
         const isFounderClass = !cl.name.toLowerCase().includes('reformer');
         return '<div style="margin-bottom:14px">' +
@@ -623,7 +624,7 @@ function renderDashboard() {
             '<div style="font-size:13px;font-weight:500;color:var(--ink)">' + cl.name +
               (cl.top_instructor ? '<span style="font-size:11px;color:var(--ink-3);font-weight:400"> · ' + cl.top_instructor + '</span>' : '') +
             '</div>' +
-            '<div style="font-size:12px;color:var(--ink-3);white-space:nowrap;margin-left:8px">' + cl.visits + ' visits' +
+            '<div style="font-size:12px;color:var(--ink-3);white-space:nowrap;margin-left:8px">' + cl.visits + ' visits · ' + cl.avg_per_session + '/session' +
               (cl.founder_visits > 0 && isFounderClass ? ' · <span style=\"color:var(--green)\">' + cl.founder_pct + '% Founders</span>' : '') +
             '</div>' +
           '</div>' +
@@ -684,8 +685,6 @@ function renderDashboard() {
 
   return `
   <div style="max-width:1100px;margin:0 auto;padding:24px 16px 0" class="fu">
-
-    <!-- Header -->
     <div class="dash-header-wrap">
       <div class="dash-header-left">
         <div class="logo">P</div>
@@ -705,14 +704,11 @@ function renderDashboard() {
 
     ${tabNav}
     <div style="padding-bottom:8px">${tabContent}</div>
-
   </div>
-
   <div style="height:24px"></div>`;
 }
 
-
-// ─── Health summary renderer ─────────────────────────────────────
+// ─── Health summary ──────────────────────────────────────────────
 function renderHealthSummary(c) {
   const hs = c.health_summary || {};
   const total = (hs.green||0) + (hs.amber||0) + (hs.red||0) + (hs.frozen||0);
@@ -746,92 +742,239 @@ function renderHealthSummary(c) {
   </div>`;
 }
 
-// ─── Dorian list renderer ─────────────────────────────────────────
-function renderDorianList(dorian, newMembers) {
-  const tiers = [
-    { key: 'never_visited', label: '⚠ Never Visited',  color: 'var(--red)',   bg: 'var(--red-light)',   desc: 'Paid but never came in' },
-    { key: 'critical',      label: '🔴 Critical',       color: 'var(--red)',   bg: 'var(--red-light)',   desc: '14–29 days no visit' },
-    { key: 'lost',          label: '⚫ Lost',            color: 'var(--ink-2)', bg: 'var(--surface-2)',   desc: '30+ days no visit' },
-    { key: 'watch',         label: '🟡 Watch',           color: 'var(--amber)', bg: 'var(--amber-light)', desc: '1–2 visits/month' },
-    { key: 'win_back',      label: '♻ Win-Back',        color: 'var(--green)', bg: 'var(--green-light)', desc: 'Cancelled this week' },
-  ];
-
-  return tiers.map(tier => {
-    const members = dorian[tier.key] || [];
-    if (!members.length) return `
-      <div style="margin-bottom:12px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--ink-3);font-size:13px">
-        <strong style="color:${tier.color}">${tier.label}</strong> — No members in this category
-      </div>`;
-
+// ─── Payment Issues card (NEW) ─────────────────────────────────
+function renderPaymentIssuesCard(failed) {
+  if (!failed || !failed.length) {
     return `
-      <div style="margin-bottom:16px">
-        <div style="font-size:11px;font-weight:600;color:${tier.color};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">${tier.label} · ${tier.desc} · ${members.length} member${members.length>1?'s':''}</div>
-        ${members.map(m => `
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;background:${tier.bg};border:1px solid var(--border);border-left:3px solid ${tier.color};border-radius:var(--radius);margin-bottom:6px;flex-wrap:wrap">
-            <div>
-              <div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:3px">${m.name}</div>
-              <div style="font-size:12px;color:var(--ink-3)">${[m.membership, m.email, m.phone].filter(Boolean).join(' · ')}</div>
-              ${m.member_since ? `<div style="font-size:11px;color:var(--ink-3);margin-top:2px">Member since ${m.member_since}${m.lifetime_visits ? ' · ' + m.lifetime_visits + ' lifetime visits' : ''}</div>` : ''}
-              ${m.cancel_date ? `<div style="font-size:11px;color:var(--ink-3);margin-top:2px">Cancelled: ${m.cancel_date}</div>` : ''}
+    <div style="background:var(--green-light);border:1px solid var(--green);border-radius:var(--radius-lg);padding:18px 22px;margin-bottom:20px">
+      <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--green);text-transform:uppercase;margin-bottom:6px">✓ Payment Issues</div>
+      <div style="font-size:13px;color:var(--ink-2)">No failed payments this week. All Founder Member autopay charges processed successfully.</div>
+    </div>`;
+  }
+
+  const arrAtRisk = failed.length * FOUNDER_PRICE * 12;
+
+  return `
+  <div style="background:var(--red-light);border:1px solid var(--red);border-radius:var(--radius-lg);padding:18px 22px;margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--red);text-transform:uppercase;margin-bottom:4px">⚠ Payment Issues — Action Required</div>
+        <div style="font-size:13px;color:var(--ink-2)">${failed.length} Founder Member${failed.length>1?'s':''} with failed autopay this week · <strong style="color:var(--red)">${fmtC(arrAtRisk)} ARR at risk</strong></div>
+      </div>
+      <button class="btn-secondary" onclick="handlePaymentIssuesDownload()" style="border-color:var(--red);color:var(--red)">⬇ Export</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${failed.map(f => {
+        const reason = (f.status||'').replace(/^Declined - CardDeclined: /, '').replace(/\.$/, '');
+        return `
+        <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:var(--radius);padding:12px 14px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:3px">${f.name}</div>
+              <div style="font-size:12px;color:var(--ink-3);margin-bottom:4px">${[f.email, f.phone].filter(Boolean).join(' · ')}</div>
+              <div style="font-size:11px;color:var(--red);font-weight:500">${reason}</div>
+              <div style="font-size:11px;color:var(--ink-3);margin-top:2px">${f.card||''} · ${f.amount||''} · ${f.date||''}</div>
             </div>
-            ${m.days_since_visit ? `<div style="font-family:var(--mono);font-size:13px;font-weight:500;color:${tier.color};white-space:nowrap">${m.days_since_visit}d ago</div>` : ''}
-          </div>`).join('')}
-      </div>`;
-  }).join('') +
-  (newMembers && newMembers.length ? `
-    <div style="margin-bottom:16px">
-      <div style="font-size:11px;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">🆕 New Founder Members This Week · Follow Up Within 48h · ${newMembers.length} member${newMembers.length>1?'s':''}</div>
-      ${newMembers.map(m => `
-        <div style="padding:12px 14px;background:var(--green-light);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:var(--radius);margin-bottom:6px">
-          <div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:3px">${m.name}</div>
-          <div style="font-size:12px;color:var(--ink-3)">${[m.membership, m.email, m.phone].filter(Boolean).join(' · ')}</div>
-          <div style="font-size:11px;color:var(--ink-3);margin-top:3px;display:flex;gap:12px;flex-wrap:wrap">
-            <span>Joined ${m.member_since}</span>
-            <span>${m.visits_so_far === 0 ? '<span style="color:var(--red);font-weight:500">⚠ Has not visited yet</span>' : m.visits_so_far + ' visit' + (m.visits_so_far>1?'s':'') + ' so far'}</span>
+            <div style="font-size:11px;color:var(--ink-3);max-width:240px;background:var(--surface-2);padding:8px 10px;border-radius:6px">
+              <strong style="color:var(--ink-2)">Action:</strong> Text/call to update card. Reactivation link if account suspended.
+            </div>
           </div>
-        </div>`).join('')}
-    </div>` : '');
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
 }
 
-// ─── Dorian CSV download ──────────────────────────────────────────
+// ─── Dorian list (REBUILT) ────────────────────────────────────
+// Priority order per spec: At Risk (amber) → Urgent (red) → New This Week
+// Each row: phone, email, last visit, days since join, suggested action
+function renderDorianList(dorian, newMembers) {
+  const dorianAtRisk = dorian.watch || [];
+  const dorianUrgent = [
+    ...(dorian.never_visited || []),
+    ...(dorian.critical || []),
+    ...(dorian.lost || []),
+  ];
+
+  const sectionAtRisk = renderDorianSection({
+    title: '🟡 At Risk — Nudge to Re-engage',
+    desc: '1–2 visits in past month. Risk of becoming Urgent if not contacted.',
+    color: 'var(--amber)',
+    bg: 'var(--amber-light)',
+    members: dorianAtRisk,
+    suggestAction: m => {
+      const d = m.days_absent || 0;
+      if (d >= 14) return 'Send personal text — has not visited in ' + d + ' days. Suggest a class.';
+      return 'Quick text check-in — book them into a favourite class this week.';
+    }
+  });
+
+  const sectionUrgent = renderDorianSection({
+    title: '🔴 Urgent — Risk of Churn',
+    desc: '0 visits or 21+ days absent. Likely cancellation in 4-6 weeks if not recovered.',
+    color: 'var(--red)',
+    bg: 'var(--red-light)',
+    members: dorianUrgent,
+    suggestAction: m => {
+      if ((m.lifetime_visits||0) === 0) return 'Never visited — call within 48h. Onboarding offer + book first class.';
+      const d = m.days_absent || 0;
+      if (d >= 30) return 'Win-back call — offer free class or 1:1 to re-engage. ' + d + ' days absent.';
+      return 'Personal call — last visit was ' + d + ' days ago. Identify barrier.';
+    }
+  });
+
+  const sectionNew = renderNewMemberSection(newMembers);
+
+  return sectionAtRisk + sectionUrgent + sectionNew;
+}
+
+function renderDorianSection({title, desc, color, bg, members, suggestAction}) {
+  if (!members || !members.length) {
+    return `
+    <div style="margin-bottom:16px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--ink-3);font-size:13px">
+      <strong style="color:${color}">${title}</strong> — None this week ✓
+    </div>`;
+  }
+
+  return `
+  <div style="margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+      <div style="font-size:12px;font-weight:600;color:${color};text-transform:uppercase;letter-spacing:0.08em">${title} · ${members.length} member${members.length>1?'s':''}</div>
+      <div style="font-size:11px;color:var(--ink-3)">${desc}</div>
+    </div>
+    ${members.map(m => {
+      const daysSinceJoin = computeDaysSinceJoin(m.member_since);
+      const action = suggestAction(m);
+      return `
+      <div style="background:${bg};border:1px solid var(--border);border-left:3px solid ${color};border-radius:var(--radius);padding:12px 14px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:220px">
+            <div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:4px">${m.name}</div>
+            <div style="font-size:12px;color:var(--ink-2);margin-bottom:3px">
+              ${[m.phone, m.email].filter(Boolean).join(' · ')}
+            </div>
+            <div style="font-size:11px;color:var(--ink-3);display:flex;gap:10px;flex-wrap:wrap">
+              ${m.last_visit ? `<span>Last visit: ${m.last_visit}</span>` : '<span style="color:var(--red)">Never visited</span>'}
+              ${daysSinceJoin != null ? `<span>${daysSinceJoin}d as member</span>` : ''}
+              ${m.days_absent ? `<span style="color:${color};font-weight:500">${m.days_absent}d absent</span>` : ''}
+              ${m.lifetime_visits != null ? `<span>${m.lifetime_visits} lifetime visits</span>` : ''}
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--ink-2);max-width:280px;background:var(--surface);padding:8px 10px;border-radius:6px;border:1px solid var(--border)">
+            <strong style="color:${color}">Action:</strong> ${action}
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderNewMemberSection(newMembers) {
+  if (!newMembers || !newMembers.length) {
+    return `
+    <div style="margin-bottom:16px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--ink-3);font-size:13px">
+      <strong style="color:var(--green)">🆕 New This Week</strong> — No new Founder Members this week
+    </div>`;
+  }
+  return `
+  <div style="margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+      <div style="font-size:12px;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:0.08em">🆕 New This Week — Follow Up Within 48h · ${newMembers.length} member${newMembers.length>1?'s':''}</div>
+      <div style="font-size:11px;color:var(--ink-3)">First 48hrs is critical. Members who don't visit in week 1 churn 5x more.</div>
+    </div>
+    ${newMembers.map(m => {
+      const daysSinceJoin = computeDaysSinceJoin(m.member_since);
+      const visits = m.visits_so_far || 0;
+      let action;
+      if (visits === 0) action = 'URGENT — call within 48h. Has not visited yet. Book first class personally.';
+      else if (visits === 1) action = 'Send "great to see you" text + suggest second class this week.';
+      else action = 'Track to 5-visit milestone — suggest classes that build on what they tried.';
+
+      return `
+      <div style="background:var(--green-light);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:var(--radius);padding:12px 14px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:220px">
+            <div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:4px">${m.name}</div>
+            <div style="font-size:12px;color:var(--ink-2);margin-bottom:3px">
+              ${[m.phone, m.email].filter(Boolean).join(' · ')}
+            </div>
+            <div style="font-size:11px;color:var(--ink-3);display:flex;gap:10px;flex-wrap:wrap">
+              <span>Joined ${m.member_since||'recently'}</span>
+              ${daysSinceJoin != null ? `<span>${daysSinceJoin}d as member</span>` : ''}
+              <span style="color:${visits===0?'var(--red)':'var(--green)'};font-weight:500">${visits} visit${visits===1?'':'s'} so far</span>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--ink-2);max-width:280px;background:var(--surface);padding:8px 10px;border-radius:6px;border:1px solid var(--border)">
+            <strong style="color:var(--green)">Action:</strong> ${action}
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function computeDaysSinceJoin(memberSince) {
+  if (!memberSince) return null;
+  try {
+    const d = new Date(memberSince);
+    if (isNaN(d)) return null;
+    const diff = Math.floor((Date.now() - d.getTime()) / 86400000);
+    return diff < 0 ? null : diff;
+  } catch { return null; }
+}
+
 function handleDorianDownload() {
   const current = state.dashData?.current || {};
   const dorian = current.dorian || {};
   const newMembers = current.new_founder_members || [];
+  const blank = { segment:'', name:'', membership:'', email:'', phone:'', member_since:'', last_visit:'', days_absent:'', days_since_join:'', lifetime_visits:'', checkins_30:'', visits_so_far:'', cancel_date:'', suggested_action:'' };
 
-  const blank = { segment:'', name:'', membership:'', email:'', phone:'', member_since:'', last_visit:'', days_absent:'', days_since_visit:'', lifetime_visits:'', checkins_30:'', visits_so_far:'', cancel_date:'' };
-
-  const map = (rows, segment) => rows.map(m => ({
-    ...blank,
-    segment,
-    name: m.name || '',
-    membership: m.membership || '',
-    email: m.email || '',
-    phone: m.phone || '',
-    member_since: m.member_since || '',
-    last_visit: m.last_visit || '',
+  const map = (rows, segment, actionFn) => rows.map(m => ({
+    ...blank, segment,
+    name: m.name||'', membership: m.membership||'', email: m.email||'', phone: m.phone||'',
+    member_since: m.member_since||'', last_visit: m.last_visit||'',
     days_absent: m.days_absent ?? '',
-    days_since_visit: m.days_since_visit ?? '',
+    days_since_join: computeDaysSinceJoin(m.member_since) ?? '',
     lifetime_visits: m.lifetime_visits ?? '',
     checkins_30: m.checkins_30 ?? '',
     visits_so_far: m.visits_so_far ?? '',
-    cancel_date: m.cancel_date || '',
+    cancel_date: m.cancel_date||'',
+    suggested_action: actionFn ? actionFn(m) : '',
   }));
 
   const all = [
-    ...map(newMembers,                  'New Founder Member - Follow Up 48h'),
-    ...map(dorian.never_visited || [],  'Never Visited - Paid but never came in'),
-    ...map(dorian.critical || [],       'Critical - 14-29 days no visit'),
-    ...map(dorian.lost || [],           'Lost - 30+ days no visit'),
-    ...map(dorian.watch || [],          'Watch - 1-2 visits/month'),
-    ...map(dorian.win_back || [],       'Win-Back - Cancelled this week'),
+    ...map(dorian.watch || [], 'At Risk - 1-2 visits/month', m => {
+      const d = m.days_absent || 0;
+      if (d >= 14) return 'Send personal text - has not visited in ' + d + ' days';
+      return 'Quick text check-in - book a class this week';
+    }),
+    ...map(dorian.never_visited || [], 'Urgent - Never Visited', m => 'Call within 48h - onboarding offer'),
+    ...map(dorian.critical || [], 'Urgent - 14-29 days no visit', m => 'Personal call - identify barrier'),
+    ...map(dorian.lost || [], 'Urgent - 30+ days no visit', m => 'Win-back call - free class offer'),
+    ...map(newMembers, 'New This Week', m => {
+      const v = m.visits_so_far || 0;
+      if (v === 0) return 'URGENT - call within 48h, book first class';
+      if (v === 1) return 'Suggest second class this week';
+      return 'Track to 5-visit milestone';
+    }),
   ];
 
   if (!all.length) return alert('No members in action list.');
   downloadCSV(all, 'dorian-action-list-' + (current.week_of || '') + '.csv');
 }
 
-// ─── Shared header ────────────────────────────────────────────────
+function handlePaymentIssuesDownload() {
+  const current = state.dashData?.current || {};
+  const failed = current.failed_payments || [];
+  if (!failed.length) return alert('No failed payments to export.');
+  const rows = failed.map(f => ({
+    name: f.name||'', email: f.email||'', phone: f.phone||'',
+    amount: f.amount||'', status: f.status||'', card: f.card||'', date: f.date||'',
+    suggested_action: 'Contact to update card. If suspended, send reactivation link.',
+  }));
+  downloadCSV(rows, 'payment-issues-' + (current.week_of || '') + '.csv');
+}
+
 function renderHeader() {
   return `
   <div class="header">
@@ -843,14 +986,11 @@ function renderHeader() {
   </div>`;
 }
 
-// ─── Events ───────────────────────────────────────────────────────
 function bindEvents() {
   const processBtn = document.getElementById('processBtn');
   if (processBtn) processBtn.onclick = processFiles;
-
   const fileInput = document.getElementById('fileInput');
   if (fileInput) fileInput.onchange = handleFiles;
-
   const dropZone = document.getElementById('dropZone');
   if (dropZone) {
     dropZone.onclick = () => {
@@ -863,45 +1003,14 @@ function bindEvents() {
   }
 }
 
-function showUpload() {
-  state.view = 'upload';
-  state.fileMap = {};
-  state.error = null;
-  render();
-}
+function showUpload() { state.view = 'upload'; state.fileMap = {}; state.error = null; render(); }
+function showDashboard() { state.view = 'dashboard'; render(); }
+function showEmpty() { state.view = 'empty'; render(); }
 
-function showDashboard() {
-  state.view = 'dashboard';
-  render();
-}
-
-function showEmpty() {
-  state.view = 'empty';
-  render();
-}
-
-function handleDragOver(e) {
-  e.preventDefault();
-  state.dragging = true;
-  const dz = document.getElementById('dropZone');
-  if (dz) dz.className = 'drop-zone active';
-}
-
-function handleDragLeave() {
-  state.dragging = false;
-  const dz = document.getElementById('dropZone');
-  if (dz) dz.className = 'drop-zone';
-}
-
-function handleDrop(e) {
-  e.preventDefault();
-  state.dragging = false;
-  processRawFiles(Array.from(e.dataTransfer.files));
-}
-
-function handleFiles(e) {
-  processRawFiles(Array.from(e.target.files));
-}
+function handleDragOver(e) { e.preventDefault(); state.dragging = true; const dz = document.getElementById('dropZone'); if (dz) dz.className = 'drop-zone active'; }
+function handleDragLeave() { state.dragging = false; const dz = document.getElementById('dropZone'); if (dz) dz.className = 'drop-zone'; }
+function handleDrop(e) { e.preventDefault(); state.dragging = false; processRawFiles(Array.from(e.dataTransfer.files)); }
+function handleFiles(e) { processRawFiles(Array.from(e.target.files)); }
 
 async function processRawFiles(rawFiles) {
   for (const file of rawFiles) {
@@ -923,7 +1032,7 @@ async function processRawFiles(rawFiles) {
   render();
 }
 
-// ─── Pre-aggregate before sending ────────────────────────────────
+// ─── AGGREGATE (with all 6 audit fixes) ─────────────────────────
 function aggregateData() {
   const fm  = state.fileMap;
   const get = key => fm[key]?.rows ?? [];
@@ -933,7 +1042,6 @@ function aggregateData() {
     const n = parseFloat(String(v).replace(/[$,]/g,''));
     return isNaN(n) ? 0 : n;
   }
-
   function fixName(raw) {
     if (!raw) return '';
     const s = String(raw).replace(/"/g,'').trim();
@@ -943,11 +1051,6 @@ function aggregateData() {
     }
     return s;
   }
-
-  const salesRows    = get('01_sales');
-  const autopayRows  = get('02_autopay');
-  const activeRows   = get('03_members_active');
-
   function parseMDY(str) {
     if (!str) return null;
     const p = str.trim().split('/');
@@ -956,7 +1059,6 @@ function aggregateData() {
     if (!m || !d || !y) return null;
     return { y, m, d };
   }
-
   function mondayOfDate(y, m, d) {
     const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
     let yr = y;
@@ -973,6 +1075,16 @@ function aggregateData() {
     return ry + '-' + String(rm).padStart(2,'0') + '-' + String(rd).padStart(2,'0');
   }
 
+  const salesRows    = get('01_sales');
+  const autopayRows  = get('02_autopay');
+  const cancelRows   = get('04_members_cancelled');
+  const firstRows    = get('05_first_visit');
+  const noReturnRows = get('06_no_return');
+  const retMgmtRows  = get('07_retention_management');
+  const attendRows   = get('09_attendance_analysis');
+  const noRevRows    = get('10_attendance_no_revenue');
+
+  // ── Determine week ──
   let weekOf;
   try {
     const weekCounts = {};
@@ -986,9 +1098,7 @@ function aggregateData() {
     Object.entries(weekCounts).forEach(([week, count]) => {
       if (count > maxCount) { maxCount = count; weekOf = week; }
     });
-
     if (!weekOf || maxCount < 5) {
-      const attendRows = get('09_attendance_analysis');
       const weekCounts2 = {};
       attendRows.forEach(r => {
         const p = parseMDY(r['Date']);
@@ -1003,46 +1113,82 @@ function aggregateData() {
     }
   } catch(e) { console.error('weekOf error:', e); }
 
-  console.log('[Prana] salesRows count:', salesRows.length, 'weekOf:', weekOf);
-
   if (!weekOf) {
     const now = new Date();
-    const y = now.getFullYear(), m = now.getMonth()+1, d = now.getDate();
-    weekOf = mondayOfDate(y, m, d);
+    weekOf = mondayOfDate(now.getFullYear(), now.getMonth()+1, now.getDate());
   }
-
   const [wsY, wsM, wsD] = weekOf.split('-').map(Number);
   const weekStart = new Date(wsY, wsM - 1, wsD, 0, 0, 0, 0);
-  // Week end = Sunday 23:59:59 (6 days after Monday)
   const weekEnd = new Date(wsY, wsM - 1, wsD + 6, 23, 59, 59, 999);
 
-  const cancelRows   = get('04_members_cancelled');
-  const firstRows    = get('05_first_visit');
-  const noReturnRows = get('06_no_return');
-  const retMgmtRows  = get('07_retention_management');
+  // ════════════════════════════════════════════════════════
+  // FIX 1: Active Founder count from 07_retention_management
+  // (Status='Active' AND Membership Type contains 'Founder')
+  // ════════════════════════════════════════════════════════
+  const activeFounderRows = retMgmtRows.filter(r => {
+    const status = (r['Status']||'').trim();
+    const type   = (r['Membership Type']||'').trim();
+    return status === 'Active' && type.includes('Founder');
+  });
+  const active_count = activeFounderRows.length;
 
-  // ── Revenue ──
-  const sales_total = salesRows.reduce((s,r) => {
+  // ════════════════════════════════════════════════════════
+  // FIX 2: MRR = active_count × $200
+  // ════════════════════════════════════════════════════════
+  const mrr = active_count * FOUNDER_PRICE;
+
+  // ════════════════════════════════════════════════════════
+  // FIX 3: Pack & Class Sales — sum 01_sales Item Total
+  // EXCLUDING any row where Item name contains "Founder"
+  // ════════════════════════════════════════════════════════
+  const non_autopay_total = salesRows.reduce((s,r) => {
+    const item = (r['Item name']||'').trim();
+    if (item.toLowerCase().includes('founder')) return s; // exclude Founder Membership purchases
     return s + toNum(r['Item Total'] || r['Total'] || r['Amount'] || 0);
   }, 0);
 
-  // ── Membership ──
-  const active_count = activeRows.length;
-  const mrr          = active_count * 199;
+  // ════════════════════════════════════════════════════════
+  // FIX 4: Weekly Sales = MRR + non-autopay (total weekly revenue)
+  // ════════════════════════════════════════════════════════
+  const total_weekly_revenue = mrr + non_autopay_total;
 
-  // New Founder Members this week
+  // ════════════════════════════════════════════════════════
+  // NEW: Failed Founder payments this week
+  // ════════════════════════════════════════════════════════
+  const failed_payments = autopayRows
+    .filter(r => {
+      const item = (r['Item']||'').trim();
+      const status = (r['Status']||'').trim();
+      return item.includes('Founder') && status !== 'Success' && status !== '';
+    })
+    .map(r => ({
+      name: (r['Client']||'').trim(),
+      email: (r['Email']||'').trim(),
+      phone: (r['Phone #']||'').trim(),
+      amount: (r['Amount']||'').trim(),
+      status: (r['Status']||'').trim(),
+      card: (r['Billing Information']||'').trim(),
+      date: (r['Date']||'').trim(),
+    }))
+    // dedupe by client (keep most recent failure)
+    .reduce((acc, f) => {
+      const existing = acc.find(x => x.name === f.name);
+      if (!existing) acc.push(f);
+      return acc;
+    }, []);
+
+  // ── New Founder Members this week ──
   const first_visit_count = retMgmtRows.filter(r => {
-    const ms   = r['Member Since'] || '';
-    const type = (r['Membership Type'] || '').toLowerCase();
-    if (!type.includes('founder')) return false;
+    const status = (r['Status']||'').trim();
+    const type   = (r['Membership Type']||'').toLowerCase();
+    if (status !== 'Active' || !type.includes('founder')) return false;
+    const ms = r['Member Since'] || '';
     try { return new Date(ms) >= weekStart; } catch { return false; }
   }).length;
 
-  // ── FIXED: Cancelled THIS WEEK ONLY ──
-  // Cancellation Date format: "Terminated from MM/DD/YYYY"
+  // ── Cancelled this week ──
   const cancelled_count = cancelRows.filter(r => {
     const raw = (r['Cancellation Date'] || '').trim();
-    // Strip "Terminated from " prefix if present
     const dateStr = raw.replace(/^Terminated from\s*/i, '').trim();
     if (!dateStr) return false;
     try {
@@ -1053,10 +1199,9 @@ function aggregateData() {
 
   const first_time_visitors = firstRows.length;
 
-  // ── Build Founder Member health map ──
+  // ── Founder Member health map (from 07) ──
   const founderMap = {};
-  retMgmtRows.forEach(r => {
-    if (!(r['Membership Type']||'').includes('Founder')) return;
+  activeFounderRows.forEach(r => {
     const name = ((r['First name']||'').trim() + ' ' + (r['Last name']||'').trim()).trim();
     if (!name) return;
     const c30  = parseInt(r['Check Ins 30 Day']||'0') || 0;
@@ -1064,7 +1209,6 @@ function aggregateData() {
     const lv   = r['Last'] || '';
     const freeze = (r['Freeze']||'') === 'Yes';
     let daysAbsent = null;
-    // Use weekEnd as reference date so health reflects end-of-week state, not today
     try { const d = new Date(lv); if (!isNaN(d)) daysAbsent = Math.floor((weekEnd - d) / 86400000); } catch {}
     let health = 'green';
     if (freeze) health = 'frozen';
@@ -1072,13 +1216,12 @@ function aggregateData() {
     else if (c30 <= 2) health = 'amber';
     founderMap[name.toLowerCase()] = {
       name, email: (r['Email']||'').trim(), phone: (r['Home phone']||'').trim(),
-      membership: 'Founder Member',
+      membership: (r['Membership Type']||'Founder Member').trim(),
       member_since: r['Member Since']||'', checkins_30: c30, checkins_ytd: cYTD,
       last_visit: lv, days_absent: daysAbsent, health, freeze,
     };
   });
 
-  // ── Health summary ──
   const allF = Object.values(founderMap);
   const health_summary = {
     green:  allF.filter(f => f.health==='green').length,
@@ -1087,55 +1230,40 @@ function aggregateData() {
     frozen: allF.filter(f => f.freeze).length,
   };
 
-  // ── Dorian list ──
+  // ── Dorian segments ──
+  const enrichForDorian = f => ({
+    name: f.name, email: f.email, phone: f.phone, membership: f.membership,
+    last_visit: f.last_visit, days_absent: f.days_absent||0,
+    lifetime_visits: f.checkins_ytd||0, checkins_30: f.checkins_30||0,
+    member_since: f.member_since, health: f.health,
+  });
+
   const dorianCritical = allF
-    .filter(f => f.health === 'red' && !f.freeze && f.days_absent >= 14 && f.days_absent < 30)
+    .filter(f => f.health === 'red' && !f.freeze && f.days_absent >= 14 && f.days_absent < 30 && (f.checkins_ytd||0) > 0)
     .sort((a,b) => (b.days_absent||0) - (a.days_absent||0))
-    .map(f => ({
-      name: f.name, email: f.email, phone: f.phone, membership: f.membership,
-      last_visit: f.last_visit, days_absent: f.days_absent||0,
-      lifetime_visits: f.checkins_ytd||0, checkins_30: f.checkins_30||0,
-      member_since: f.member_since, health: 'red',
-    }));
+    .map(enrichForDorian);
 
   const dorianWatch = allF
     .filter(f => f.health === 'amber' && !f.freeze)
     .sort((a,b) => (b.days_absent||0) - (a.days_absent||0))
-    .map(f => ({
-      name: f.name, email: f.email, phone: f.phone, membership: f.membership,
-      last_visit: f.last_visit, days_absent: f.days_absent||0,
-      lifetime_visits: f.checkins_ytd||0, checkins_30: f.checkins_30||0,
-      member_since: f.member_since, health: 'amber',
-    }));
+    .map(enrichForDorian);
 
   const dorianLost = allF
-    .filter(f => f.health === 'red' && !f.freeze && (f.days_absent||0) >= 30)
+    .filter(f => f.health === 'red' && !f.freeze && (f.days_absent||0) >= 30 && (f.checkins_ytd||0) > 0)
     .sort((a,b) => (b.days_absent||0) - (a.days_absent||0))
-    .map(f => ({
-      name: f.name, email: f.email, phone: f.phone, membership: f.membership,
-      last_visit: f.last_visit, days_absent: f.days_absent||0,
-      lifetime_visits: f.checkins_ytd||0, checkins_30: f.checkins_30||0,
-      member_since: f.member_since, health: 'red',
-    }));
+    .map(enrichForDorian);
 
   const dorianNeverVisited = allF
     .filter(f => !f.freeze && (f.checkins_ytd||0) === 0)
-    .map(f => ({
-      name: f.name, email: f.email, phone: f.phone, membership: f.membership,
-      last_visit: f.last_visit, days_absent: f.days_absent||0,
-      lifetime_visits: 0, checkins_30: 0,
-      member_since: f.member_since, health: 'red',
-      never_visited: true,
-    }));
+    .map(f => ({ ...enrichForDorian(f), never_visited: true }));
 
   const browser_dorian = {
-    critical:      dorianCritical,
-    watch:         dorianWatch,
-    lost:          dorianLost,
+    critical: dorianCritical,
+    watch: dorianWatch,
+    lost: dorianLost,
     never_visited: dorianNeverVisited,
   };
 
-  // ── No-return Founder Members ──
   const no_return_members = noReturnRows
     .filter(r => (r['Pricing Option']||'').includes('Founder'))
     .slice(0, 20)
@@ -1155,26 +1283,27 @@ function aggregateData() {
       };
     });
 
-  // ── New Founder Members this week ──
   const new_founder_members = retMgmtRows
-    .filter(r => (r['Membership Type']||'').includes('Founder'))
+    .filter(r => {
+      const status = (r['Status']||'').trim();
+      const type = (r['Membership Type']||'').toLowerCase();
+      return status === 'Active' && type.includes('founder');
+    })
     .filter(r => { try { return new Date(r['Member Since']) >= weekStart; } catch { return false; } })
     .map(r => ({
       name: ((r['First name']||'').trim()+' '+(r['Last name']||'').trim()).trim(),
       email: (r['Email']||'').trim(), phone: (r['Home phone']||'').trim(),
-      membership: 'Founder Member',
+      membership: (r['Membership Type']||'Founder Member').trim(),
       member_since: r['Member Since']||'',
       visits_so_far: parseInt(r['Check Ins YTD']||'0')||0,
     }));
 
-  // ── Cancelled members ──
   const cancelled_members = cancelRows
-    .filter(r => r['Name'] && r['Name'] !== 'Total: 5')
+    .filter(r => r['Name'] && !r['Name'].toLowerCase().startsWith('total:'))
     .map(r => {
       const name   = (r['Name']||'').trim();
       const enrich = founderMap[name.toLowerCase()] || {};
       const cYTD   = enrich.checkins_ytd||0;
-      // Strip "Terminated from " prefix for display
       const cancelDateRaw = (r['Cancellation Date']||'').replace(/^Terminated from\s*/i,'').trim();
       return {
         name, email: (r['Email Address ']||r['Email']||'').trim(),
@@ -1185,19 +1314,16 @@ function aggregateData() {
       };
     });
 
-  // ── Build Founder ID set ──
+  // ── Founder ID set for attendance cross-ref ──
   const founderIds = new Set(
-    retMgmtRows
-      .filter(r => (r['Membership Type']||'').includes('Founder'))
-      .map(r => (r['ID']||'').trim())
-      .filter(Boolean)
+    activeFounderRows.map(r => (r['ID']||'').trim()).filter(Boolean)
   );
 
-  const attendRows = get('09_attendance_analysis');
   const classMap   = {};
   const instrMap   = {};
   const timeMap    = {};
   const dayMap     = {};
+  const sessionsSeen = new Set();
   const days       = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   let late_cancel_count    = 0;
   let founder_visits_total = 0;
@@ -1223,10 +1349,14 @@ function aggregateData() {
       if (!isNaN(d)) dayName = days[d.getDay()];
     } catch {}
 
+    const sessionKey = className + '|' + dateStr + '|' + startTime;
+    sessionsSeen.add(sessionKey);
+
     if (!classMap[className]) classMap[className] = {
       name: className, visits:0, founder_visits:0, late_cancels:0,
-      instructors:{}, times:{}, days:{}
+      instructors:{}, times:{}, days:{}, sessions:new Set()
     };
+    classMap[className].sessions.add(sessionKey);
 
     if (status.includes('signed')) {
       classMap[className].visits += 1;
@@ -1237,7 +1367,7 @@ function aggregateData() {
 
       if (!instrMap[instructor]) instrMap[instructor] = {name:instructor, visits:0, classes_taught:new Set()};
       instrMap[instructor].visits += 1;
-      instrMap[instructor].classes_taught.add(className+dateStr+startTime);
+      instrMap[instructor].classes_taught.add(sessionKey);
 
       if (startTime) timeMap[startTime] = (timeMap[startTime]||0)+1;
       if (dayName)   dayMap[dayName]    = (dayMap[dayName]||0)+1;
@@ -1248,6 +1378,7 @@ function aggregateData() {
     }
   });
 
+  // FIX 7: include sessions_count per class for accurate per-session avg
   const class_data = Object.values(classMap)
     .filter(c => c.visits > 0)
     .map(c => ({
@@ -1255,12 +1386,17 @@ function aggregateData() {
       visits:         c.visits,
       founder_visits: c.founder_visits,
       late_cancels:   c.late_cancels,
+      sessions_count: c.sessions.size,
       founder_pct:    c.visits > 0 ? Math.round(c.founder_visits/c.visits*100) : 0,
       top_instructor: Object.entries(c.instructors).sort((a,b)=>b[1]-a[1])[0]?.[0] || '',
       top_time:       Object.entries(c.times).sort((a,b)=>b[1]-a[1])[0]?.[0] || '',
       top_day:        Object.entries(c.days).sort((a,b)=>b[1]-a[1])[0]?.[0] || '',
     }))
     .sort((a,b) => b.visits - a.visits);
+
+  const total_sessions = sessionsSeen.size;
+  const total_visits = class_data.reduce((s,c)=>s+c.visits,0);
+  const avg_per_session = total_sessions > 0 ? Math.round(total_visits/total_sessions*10)/10 : 0;
 
   const instructor_data = Object.values(instrMap)
     .map(i => ({
@@ -1284,7 +1420,6 @@ function aggregateData() {
     .filter(c => c.founder_visits > 0)
     .sort((a,b) => b.founder_pct - a.founder_pct);
 
-  const noRevRows     = get('10_attendance_no_revenue');
   const no_show_count = noRevRows.filter(r =>
     (r['Status']||'').toLowerCase().includes('no show') ||
     (r['Status']||'').toLowerCase().includes('late cancel')
@@ -1292,13 +1427,19 @@ function aggregateData() {
 
   return {
     week_of: weekOf,
-    sales_total:          Math.round(sales_total),
-    autopay_total:        mrr,
+    sales_total:          Math.round(non_autopay_total),
+    non_autopay_total:    Math.round(non_autopay_total),
+    autopay_total:        mrr,                     // legacy alias
+    mrr:                  mrr,
+    total_weekly_revenue: Math.round(total_weekly_revenue),
     active_count,
     cancelled_count,
     first_visit_count,
     first_time_visitors,
     no_show_count,
+    total_sessions,
+    avg_per_session,
+    failed_payments,
     no_return_members,
     new_founder_members,
     cancelled_members,
@@ -1313,8 +1454,6 @@ function aggregateData() {
   };
 }
 
-
-// ─── Process & save ───────────────────────────────────────────────
 async function processFiles() {
   const allReady = EXPECTED.every(e => state.fileMap[e.key]?.status === 'ok');
   if (!allReady) { alert('Please upload all 12 CSV files first.'); return; }
@@ -1326,7 +1465,6 @@ async function processFiles() {
   try {
     const browserData = aggregateData();
 
-    // Attach last 4 weeks of history from browser cache for trend analysis
     const historyForPrompt = state.allWeeksData
       .filter(w => w.week_of !== browserData.week_of)
       .sort((a,b) => a.week_of > b.week_of ? 1 : -1)
@@ -1353,6 +1491,7 @@ async function processFiles() {
     if (!result.ok) throw new Error(result.error || 'Process failed');
 
     const current = result.current;
+    // Ensure browser-computed fields override Claude's (browser is source of truth for numbers)
     current.health_summary      = browserData.health_summary;
     current.avg_founder_visits  = browserData.avg_founder_visits;
     current.founder_classes     = browserData.founder_classes;
@@ -1363,6 +1502,31 @@ async function processFiles() {
     current.first_time_visitors = browserData.first_time_visitors;
     current.class_data          = browserData.class_data;
     current.dorian              = browserData.browser_dorian;
+    current.failed_payments     = browserData.failed_payments;
+    current.total_sessions      = browserData.total_sessions;
+    current.avg_per_session     = browserData.avg_per_session;
+
+    // Force-correct revenue numbers (browser is canonical)
+    current.revenue = current.revenue || {};
+    current.revenue.mrr = browserData.mrr;
+    current.revenue.pack_and_class = Math.round(browserData.non_autopay_total);
+    current.revenue.total_weekly = Math.round(browserData.total_weekly_revenue);
+    current.revenue.mrr_pct = browserData.total_weekly_revenue > 0
+      ? Math.round(browserData.mrr / browserData.total_weekly_revenue * 100) : 0;
+    current.revenue.revenue_per_member = browserData.active_count > 0
+      ? Math.round(browserData.total_weekly_revenue / browserData.active_count) : 0;
+    current.revenue.arr_at_risk = (browserData.failed_payments?.length || 0) * FOUNDER_PRICE * 12;
+
+    // Force-correct membership
+    current.membership = current.membership || {};
+    current.membership.active_count = browserData.active_count;
+    current.membership.new_this_week = browserData.first_visit_count;
+    current.membership.churned_this_week = browserData.cancelled_count;
+    current.membership.net_growth = browserData.first_visit_count - browserData.cancelled_count;
+    current.membership.churn_rate_pct = browserData.active_count > 0
+      ? Math.round(browserData.cancelled_count / browserData.active_count * 1000) / 10 : 0;
+    current.membership.progress_to_800_pct = Math.round(browserData.active_count / 800 * 100);
+    current.membership.failed_payment_count = browserData.failed_payments?.length || 0;
 
     await fetch('/api/save', {
       method:  'POST',
@@ -1391,12 +1555,10 @@ async function processFiles() {
   render();
 }
 
-
 // ─── Trends tab ───────────────────────────────────────────────────
 function renderTrends() {
   const weeks = state.allWeeksData;
   const n     = weeks.length;
-
   if (n < 2) {
     return '<div style="text-align:center;padding:60px 20px"><div style="font-size:14px;color:var(--ink-3)">Only ' + n + ' week' + (n===1?' of':'s of') + ' data so far. Upload more weeks to see trends.</div></div>';
   }
@@ -1406,34 +1568,27 @@ function renderTrends() {
   const latest = sorted[n-1];
   const ti     = latest.trends_intelligence || {};
 
-  // ── Computed metrics ──
-  const avgNetGrowth      = sorted.reduce((s,w) => s + (w.membership?.net_growth||0), 0) / n;
-  const remaining         = 800 - (latest.membership?.active_count || 0);
-  const weeksTo800        = avgNetGrowth > 0 ? Math.ceil(remaining / avgNetGrowth) : null;
-  const monthsTo800       = weeksTo800 ? Math.round(weeksTo800 / 4.3 * 10) / 10 : null;
+  const avgNetGrowth = sorted.reduce((s,w) => s + (w.membership?.net_growth||0), 0) / n;
+  const remaining    = 800 - (latest.membership?.active_count || 0);
+  const weeksTo800   = avgNetGrowth > 0 ? Math.ceil(remaining / avgNetGrowth) : null;
+  const monthsTo800  = weeksTo800 ? Math.round(weeksTo800 / 4.3 * 10) / 10 : null;
 
-  const churnByWeek       = sorted.map(w => w.membership?.churned_this_week || 0);
-  const churnTrend        = churnByWeek.length >= 2
+  const churnByWeek = sorted.map(w => w.membership?.churned_this_week || 0);
+  const churnTrend = churnByWeek.length >= 2
     ? (churnByWeek[churnByWeek.length-1] > churnByWeek[churnByWeek.length-2] ? 'up' : churnByWeek[churnByWeek.length-1] < churnByWeek[churnByWeek.length-2] ? 'down' : 'flat')
     : 'flat';
 
-  const visitsByWeek      = sorted.map(w => w.avg_founder_visits || 0);
-  const visitsTrend       = visitsByWeek.length >= 2
+  const visitsByWeek = sorted.map(w => w.avg_founder_visits || 0);
+  const visitsTrend = visitsByWeek.length >= 2
     ? (visitsByWeek[visitsByWeek.length-1] > visitsByWeek[visitsByWeek.length-2] ? 'up' : visitsByWeek[visitsByWeek.length-1] < visitsByWeek[visitsByWeek.length-2] ? 'down' : 'flat')
     : 'flat';
 
+  // FIX: Net MRR movement now uses $200 not $199
   const netMRRByWeek = sorted.map(w => {
-    const gained = (w.membership?.new_this_week || 0) * 199;
-    const lost   = (w.membership?.churned_this_week || 0) * 199;
+    const gained = (w.membership?.new_this_week || 0) * FOUNDER_PRICE;
+    const lost   = (w.membership?.churned_this_week || 0) * FOUNDER_PRICE;
     return { week_of: w.week_of, gained, lost, net: gained - lost };
   });
-
-  const trendCard = (label, value, sub, color) =>
-    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">' +
-      '<div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px">' + label + '</div>' +
-      '<div style="font-family:var(--display);font-size:26px;color:' + (color||'var(--ink)') + ';line-height:1.1">' + value + '</div>' +
-      '<div style="font-size:11px;color:var(--ink-3);margin-top:5px">' + sub + '</div>' +
-    '</div>';
 
   const trendArrow = (t) => t === 'up' ? '↑' : t === 'down' ? '↓' : '→';
   const trendColor = (t, goodDir) => {
@@ -1441,7 +1596,6 @@ function renderTrends() {
     return t === goodDir ? 'var(--green)' : 'var(--red)';
   };
 
-  // ── AI trend actions block ──
   const trendActionsBlock = ti.trend_actions && ti.trend_actions.length ? `
     <div style="background:var(--ink);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px">
       <div style="font-size:10px;font-weight:600;letter-spacing:0.14em;color:rgba(255,255,255,0.35);text-transform:uppercase;margin-bottom:10px">TREND-BASED ACTIONS · WEEK OF ${latest.week_of}</div>
@@ -1459,7 +1613,6 @@ function renderTrends() {
       </div>
     </div>` : '';
 
-  // ── Projection card ──
   const projectionBlock = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px;box-shadow:var(--shadow)">
       <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Projection to 800 Founder Members</div>
@@ -1477,7 +1630,6 @@ function renderTrends() {
       ${ti.projection ? '<div style="margin-top:12px;padding:10px 12px;background:var(--green-light);border-radius:var(--radius);font-size:13px;color:var(--green)">' + ti.projection + '</div>' : ''}
     </div>`;
 
-  // ── Churn & engagement signals ──
   const signalsBlock = `
     <div class="g2" style="margin-bottom:20px">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;box-shadow:var(--shadow)">
@@ -1517,7 +1669,6 @@ function renderTrends() {
       </div>
     </div>`;
 
-  // ── Net MRR movement ──
   const netMRRBlock = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px;box-shadow:var(--shadow)">
       <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Net MRR Movement — New Member Revenue vs Churn Loss</div>
@@ -1525,7 +1676,7 @@ function renderTrends() {
         const isLast = i === netMRRByWeek.length - 1;
         return '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:' + (isLast?'10px 12px':'6px 0') + ';background:' + (isLast?'var(--green-light)':'transparent') + ';border-radius:' + (isLast?'var(--radius)':'0') + '">' +
           '<div style="font-family:var(--mono);font-size:11px;color:var(--ink-3);width:80px;flex-shrink:0">' + w.week_of + '</div>' +
-          '<div style="flex:1;display:flex;gap:4px;align-items:center">' +
+          '<div style="flex:1;display:flex;gap:4px;align-items:center;flex-wrap:wrap">' +
             '<span style="font-size:12px;color:var(--green);font-weight:500">+' + fmtC(w.gained) + '</span>' +
             '<span style="font-size:11px;color:var(--ink-3)">gained</span>' +
             '<span style="font-size:11px;color:var(--ink-3);margin:0 4px">·</span>' +
@@ -1537,7 +1688,6 @@ function renderTrends() {
       }).join('')}
     </div>`;
 
-  // ── Week by week table ──
   const tableBlock = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow)">
       <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Week by Week</div>
@@ -1582,7 +1732,6 @@ function renderTrends() {
     ${tableBlock}`;
 }
 
-// ─── Switch week ─────────────────────────────────────────────────
 function switchWeek(weekOf) {
   if (state.selectedWeek === weekOf) return;
   const cached = state.allWeeksData.find(w => w.week_of === weekOf);
@@ -1595,7 +1744,6 @@ function switchWeek(weekOf) {
   render();
 }
 
-// ─── Init ─────────────────────────────────────────────────────────
 async function init() {
   state.view = 'loading';
   render();
