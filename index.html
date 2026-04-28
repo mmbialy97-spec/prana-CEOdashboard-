@@ -6,8 +6,15 @@
 <title>Prana Wellness — CEO Dashboard</title>
 <!--
 ═══════════════════════════════════════════════════════════════════
-  CHANGELOG (2026-04-27)
+  CHANGELOG (2026-04-28)
   ────────────────────────────────────────────────────────────────
+  FIX: Race condition in init() — background read_weeks fetch was
+  stomping on freshly processed dashData after upload.
+  Added `state.freshUpload` flag. When a user processes new CSVs,
+  the background Sheets re-fetch updates allWeeksData (for Trends)
+  but no longer overwrites dashData or triggers a re-render.
+  ────────────────────────────────────────────────────────────────
+  Previous changes (2026-04-27):
   1. Active Founder source standardised to 07_retention_management
      filtered to Status=Active AND Membership Type contains 'Founder'.
      03_members_active.csv is no longer used for headcount.
@@ -169,7 +176,6 @@ const EXPECTED = [
 ];
 const GROUPS = ['Revenue','Membership','Attendance'];
 
-// MRR is locked to $200 per Founder Member per month.
 const FOUNDER_PRICE = 200;
 
 // ─── State ────────────────────────────────────────────────────────
@@ -185,6 +191,7 @@ let state = {
   allWeeksData: [],
   allWeeksLoading: false,
   error: null,
+  freshUpload: false, // ← FIX: prevents background read_weeks from stomping fresh upload
 };
 
 // ─── Render ───────────────────────────────────────────────────────
@@ -480,8 +487,6 @@ function renderDashboard() {
     ${renderDorianList(dorian, newFounders)}`;
 
   // ─── TAB: REVENUE ────────────────────────────────────────────────
-  // FIX 4: Weekly Sales = total weekly revenue (MRR + non-autopay)
-  // FIX 6: Revenue/Member = total weekly rev ÷ active members
   const totalWeekly = (r.total_weekly || ((r.mrr||0) + (r.pack_and_class||0)));
   const revPerMember = (m.active_count||0) > 0 ? Math.round(totalWeekly / m.active_count) : 0;
 
@@ -527,12 +532,10 @@ function renderDashboard() {
   const allClasses = c.class_data      || [];
   const maxVisits  = allClasses.length ? allClasses[0].visits : 1;
 
-  // FIX 7: avg_per_session is the correct denominator, NOT total visits
   const totalSessions  = c.total_sessions || 0;
   const totalVisits    = a.total_visits || allClasses.reduce((s,cl)=>s+cl.visits,0);
   const avgPerSession  = totalSessions > 0 ? Math.round(totalVisits/totalSessions*10)/10 : 0;
 
-  // Per-session attendance for each class
   const classWithAvg = allClasses.map(cl => ({
     ...cl,
     sessions_count: cl.sessions_count || 1,
@@ -742,7 +745,7 @@ function renderHealthSummary(c) {
   </div>`;
 }
 
-// ─── Payment Issues card (NEW) ─────────────────────────────────
+// ─── Payment Issues card ──────────────────────────────────────────
 function renderPaymentIssuesCard(failed) {
   if (!failed || !failed.length) {
     return `
@@ -785,9 +788,7 @@ function renderPaymentIssuesCard(failed) {
   </div>`;
 }
 
-// ─── Dorian list (REBUILT) ────────────────────────────────────
-// Priority order per spec: At Risk (amber) → Urgent (red) → New This Week
-// Each row: phone, email, last visit, days since join, suggested action
+// ─── Dorian list ──────────────────────────────────────────────────
 function renderDorianList(dorian, newMembers) {
   const dorianAtRisk = dorian.watch || [];
   const dorianUrgent = [
@@ -1032,7 +1033,7 @@ async function processRawFiles(rawFiles) {
   render();
 }
 
-// ─── AGGREGATE (with all 6 audit fixes) ─────────────────────────
+// ─── AGGREGATE ────────────────────────────────────────────────────
 function aggregateData() {
   const fm  = state.fileMap;
   const get = key => fm[key]?.rows ?? [];
@@ -1121,10 +1122,7 @@ function aggregateData() {
   const weekStart = new Date(wsY, wsM - 1, wsD, 0, 0, 0, 0);
   const weekEnd = new Date(wsY, wsM - 1, wsD + 6, 23, 59, 59, 999);
 
-  // ════════════════════════════════════════════════════════
   // FIX 1: Active Founder count from 07_retention_management
-  // (Status='Active' AND Membership Type contains 'Founder')
-  // ════════════════════════════════════════════════════════
   const activeFounderRows = retMgmtRows.filter(r => {
     const status = (r['Status']||'').trim();
     const type   = (r['Membership Type']||'').trim();
@@ -1132,29 +1130,20 @@ function aggregateData() {
   });
   const active_count = activeFounderRows.length;
 
-  // ════════════════════════════════════════════════════════
   // FIX 2: MRR = active_count × $200
-  // ════════════════════════════════════════════════════════
   const mrr = active_count * FOUNDER_PRICE;
 
-  // ════════════════════════════════════════════════════════
-  // FIX 3: Pack & Class Sales — sum 01_sales Item Total
-  // EXCLUDING any row where Item name contains "Founder"
-  // ════════════════════════════════════════════════════════
+  // FIX 3: Pack & Class Sales — exclude Founder Membership purchases
   const non_autopay_total = salesRows.reduce((s,r) => {
     const item = (r['Item name']||'').trim();
-    if (item.toLowerCase().includes('founder')) return s; // exclude Founder Membership purchases
+    if (item.toLowerCase().includes('founder')) return s;
     return s + toNum(r['Item Total'] || r['Total'] || r['Amount'] || 0);
   }, 0);
 
-  // ════════════════════════════════════════════════════════
-  // FIX 4: Weekly Sales = MRR + non-autopay (total weekly revenue)
-  // ════════════════════════════════════════════════════════
+  // FIX 4: Weekly Sales = MRR + non-autopay
   const total_weekly_revenue = mrr + non_autopay_total;
 
-  // ════════════════════════════════════════════════════════
-  // NEW: Failed Founder payments this week
-  // ════════════════════════════════════════════════════════
+  // Failed Founder payments
   const failed_payments = autopayRows
     .filter(r => {
       const item = (r['Item']||'').trim();
@@ -1170,14 +1159,13 @@ function aggregateData() {
       card: (r['Billing Information']||'').trim(),
       date: (r['Date']||'').trim(),
     }))
-    // dedupe by client (keep most recent failure)
     .reduce((acc, f) => {
       const existing = acc.find(x => x.name === f.name);
       if (!existing) acc.push(f);
       return acc;
     }, []);
 
-  // ── New Founder Members this week ──
+  // New Founder Members this week
   const first_visit_count = retMgmtRows.filter(r => {
     const status = (r['Status']||'').trim();
     const type   = (r['Membership Type']||'').toLowerCase();
@@ -1186,7 +1174,7 @@ function aggregateData() {
     try { return new Date(ms) >= weekStart; } catch { return false; }
   }).length;
 
-  // ── Cancelled this week ──
+  // Cancelled this week
   const cancelled_count = cancelRows.filter(r => {
     const raw = (r['Cancellation Date'] || '').trim();
     const dateStr = raw.replace(/^Terminated from\s*/i, '').trim();
@@ -1199,7 +1187,7 @@ function aggregateData() {
 
   const first_time_visitors = firstRows.length;
 
-  // ── Founder Member health map (from 07) ──
+  // Founder Member health map
   const founderMap = {};
   activeFounderRows.forEach(r => {
     const name = ((r['First name']||'').trim() + ' ' + (r['Last name']||'').trim()).trim();
@@ -1230,7 +1218,6 @@ function aggregateData() {
     frozen: allF.filter(f => f.freeze).length,
   };
 
-  // ── Dorian segments ──
   const enrichForDorian = f => ({
     name: f.name, email: f.email, phone: f.phone, membership: f.membership,
     last_visit: f.last_visit, days_absent: f.days_absent||0,
@@ -1314,7 +1301,6 @@ function aggregateData() {
       };
     });
 
-  // ── Founder ID set for attendance cross-ref ──
   const founderIds = new Set(
     activeFounderRows.map(r => (r['ID']||'').trim()).filter(Boolean)
   );
@@ -1378,7 +1364,6 @@ function aggregateData() {
     }
   });
 
-  // FIX 7: include sessions_count per class for accurate per-session avg
   const class_data = Object.values(classMap)
     .filter(c => c.visits > 0)
     .map(c => ({
@@ -1429,7 +1414,7 @@ function aggregateData() {
     week_of: weekOf,
     sales_total:          Math.round(non_autopay_total),
     non_autopay_total:    Math.round(non_autopay_total),
-    autopay_total:        mrr,                     // legacy alias
+    autopay_total:        mrr,
     mrr:                  mrr,
     total_weekly_revenue: Math.round(total_weekly_revenue),
     active_count,
@@ -1491,7 +1476,8 @@ async function processFiles() {
     if (!result.ok) throw new Error(result.error || 'Process failed');
 
     const current = result.current;
-    // Ensure browser-computed fields override Claude's (browser is source of truth for numbers)
+
+    // Browser is source of truth — override Claude's computed values
     current.health_summary      = browserData.health_summary;
     current.avg_founder_visits  = browserData.avg_founder_visits;
     current.founder_classes     = browserData.founder_classes;
@@ -1506,7 +1492,6 @@ async function processFiles() {
     current.total_sessions      = browserData.total_sessions;
     current.avg_per_session     = browserData.avg_per_session;
 
-    // Force-correct revenue numbers (browser is canonical)
     current.revenue = current.revenue || {};
     current.revenue.mrr = browserData.mrr;
     current.revenue.pack_and_class = Math.round(browserData.non_autopay_total);
@@ -1517,7 +1502,6 @@ async function processFiles() {
       ? Math.round(browserData.total_weekly_revenue / browserData.active_count) : 0;
     current.revenue.arr_at_risk = (browserData.failed_payments?.length || 0) * FOUNDER_PRICE * 12;
 
-    // Force-correct membership
     current.membership = current.membership || {};
     current.membership.active_count = browserData.active_count;
     current.membership.new_this_week = browserData.first_visit_count;
@@ -1542,6 +1526,8 @@ async function processFiles() {
     const newIdx       = state.allWeeksData.findIndex(w => w.week_of === current.week_of);
     const newPrevious  = newIdx > 0 ? state.allWeeksData[newIdx - 1] : null;
     state.dashData     = { current, previous: newPrevious };
+
+    state.freshUpload  = true; // ← FIX: lock in this data, block background re-fetch from overwriting
 
     state.processing = false;
     state.view = 'dashboard';
@@ -1583,7 +1569,6 @@ function renderTrends() {
     ? (visitsByWeek[visitsByWeek.length-1] > visitsByWeek[visitsByWeek.length-2] ? 'up' : visitsByWeek[visitsByWeek.length-1] < visitsByWeek[visitsByWeek.length-2] ? 'down' : 'flat')
     : 'flat';
 
-  // FIX: Net MRR movement now uses $200 not $199
   const netMRRByWeek = sorted.map(w => {
     const gained = (w.membership?.new_this_week || 0) * FOUNDER_PRICE;
     const lost   = (w.membership?.churned_this_week || 0) * FOUNDER_PRICE;
@@ -1744,6 +1729,7 @@ function switchWeek(weekOf) {
   render();
 }
 
+// ─── INIT ─────────────────────────────────────────────────────────
 async function init() {
   state.view = 'loading';
   render();
@@ -1771,6 +1757,8 @@ async function init() {
     state.view         = 'dashboard';
     render();
 
+    // Background: load all historical weeks for Trends tab
+    // FIX: if user already processed new files this session, don't overwrite their fresh data
     try {
       const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
       const weeks = (weeksData.weeks || []).sort((a,b) => a.week_of > b.week_of ? 1 : -1);
@@ -1781,7 +1769,8 @@ async function init() {
           if (r.ok && r.current) allData.push(r.current);
         } catch {}
       }
-      if (allData.length) {
+      if (allData.length && !state.freshUpload) {
+        // ↑ FIX: only overwrite dashData if user hasn't done a fresh upload this session
         allData.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
         state.allWeeksData = allData;
         state.weeks        = allData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
@@ -1790,6 +1779,17 @@ async function init() {
         state.dashData   = { current: trueLatest, previous: trueIdx > 0 ? allData[trueIdx-1] : null };
         state.selectedWeek = trueLatest.week_of;
         render();
+      } else if (allData.length && state.freshUpload) {
+        // Still update allWeeksData for Trends tab, but don't touch dashData or re-render
+        allData.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
+        // Merge: keep the fresh upload in allWeeksData, update historical weeks around it
+        const freshWeek = state.dashData?.current?.week_of;
+        const merged = allData.map(w => w.week_of === freshWeek ? state.dashData.current : w);
+        if (!merged.find(w => w.week_of === freshWeek)) merged.push(state.dashData.current);
+        merged.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
+        state.allWeeksData = merged;
+        state.weeks        = merged.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
+        // No render() call — dashData stays as-is
       }
     } catch {}
 
