@@ -6,32 +6,39 @@
 <title>Prana Wellness — CEO Dashboard</title>
 <!--
 ═══════════════════════════════════════════════════════════════════
-  CHANGELOG (2026-04-28)
+  CHANGELOG (2026-04-29)
   ────────────────────────────────────────────────────────────────
-  FIX: Race condition in init() — background read_weeks fetch was
+  FIX A: Cancelled CSV "Total: N" footer row now filtered
+         explicitly at the top of the cancelled parse pipeline.
+  FIX B: Reconciliation warning — when previous week active_count
+         delta doesn't match (new - churned), surface a warning
+         banner on the dashboard so silent data inconsistencies
+         become visible.
+  FIX C: baseline_corrected flag — every saved row from now on
+         carries baseline_corrected:true. The wow() comparator
+         hides "vs last week" deltas when comparing a corrected
+         row against an uncorrected legacy row, so this week's
+         clean numbers don't show fake regression against last
+         week's pre-fix saved data. Once two corrected weeks
+         exist, comparisons return automatically.
+  ────────────────────────────────────────────────────────────────
+  Previous changes (2026-04-28):
+  Race condition in init() — background read_weeks fetch was
   stomping on freshly processed dashData after upload.
-  Added `state.freshUpload` flag. When a user processes new CSVs,
-  the background Sheets re-fetch updates allWeeksData (for Trends)
-  but no longer overwrites dashData or triggers a re-render.
+  Added `state.freshUpload` flag.
   ────────────────────────────────────────────────────────────────
   Previous changes (2026-04-27):
   1. Active Founder source standardised to 07_retention_management
      filtered to Status=Active AND Membership Type contains 'Founder'.
-     03_members_active.csv is no longer used for headcount.
-  2. MRR now = active_count × $200 (was $199).
-  3. Pack & Class Sales (sales_total) now SUMS 01_sales Item Total
-     ONLY for rows where Item name does NOT contain "Founder".
-     Prevents double-counting Founder Membership purchases in MRR.
-  4. Weekly Sales redefined = MRR + non-autopay (total weekly revenue).
-  5. MRR Stability copy fixed — celebrates ≥70% as target met.
-  6. Revenue/Member redefined = total weekly revenue ÷ active members.
-  7. Class avg copy now uses avg_per_session, not "of 98".
-  8. NEW: Payment Issues card on Members tab — Founder Members with
-     failed/declined/suspended autopay this week.
-  9. NEW: Dorian's working list rebuilt with priority order:
-     At Risk (amber) → Urgent (red) → New this week.
-     Each row shows phone, email, last visit, days since join,
-     and a suggested action.
+  2. MRR now = active_count × $200.
+  3. Pack & Class Sales now SUMS 01_sales Item Total ONLY for
+     rows where Item name does NOT contain "Founder".
+  4. Weekly Sales redefined = MRR + non-autopay.
+  5. MRR Stability copy fixed.
+  6. Revenue/Member redefined = total weekly revenue ÷ active.
+  7. Class avg copy now uses avg_per_session.
+  8. Payment Issues card on Members tab.
+  9. Dorian's working list rebuilt with priority order.
 ═══════════════════════════════════════════════════════════════════
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -153,6 +160,11 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
   .intel-headline{font-size:17px !important}
   .action-grid{flex-direction:column}
 }
+
+.recon-banner{background:var(--amber-light);border:1px solid var(--amber);border-radius:var(--radius-lg);padding:14px 18px;margin-bottom:16px;display:flex;gap:12px;align-items:flex-start}
+.recon-banner-icon{width:24px;height:24px;border-radius:50%;background:var(--amber);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.recon-banner-title{font-size:12px;font-weight:600;color:var(--amber);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px}
+.recon-banner-text{font-size:13px;color:var(--ink-2);line-height:1.6}
 </style>
 </head>
 <body>
@@ -191,7 +203,7 @@ let state = {
   allWeeksData: [],
   allWeeksLoading: false,
   error: null,
-  freshUpload: false, // ← FIX: prevents background read_weeks from stomping fresh upload
+  freshUpload: false,
 };
 
 // ─── Render ───────────────────────────────────────────────────────
@@ -377,8 +389,14 @@ function renderDashboard() {
   const failed        = c.failed_payments || [];
   const founderVisits = (c.founder_classes||[]).reduce((s,cl)=>s+(cl.founder_visits||0),0);
 
+  // ─── FIX C: Hide WoW deltas when comparing corrected current → uncorrected previous ──
+  // Prevents fake regression signals during the methodology transition week.
+  const currentCorrected  = c.baseline_corrected === true;
+  const previousCorrected = p?.baseline_corrected === true;
+  const canCompareWoW = !p ? false : (!currentCorrected || previousCorrected);
+
   const wow = (curr, prev, isC) => {
-    if (!p || prev == null) return '';
+    if (!canCompareWoW || prev == null) return '';
     const diff = curr - prev;
     if (diff === 0) return '';
     const color = diff > 0 ? 'var(--green)' : 'var(--red)';
@@ -410,8 +428,34 @@ function renderDashboard() {
       `).join('')}
     </div>`;
 
+  // ─── FIX B: Reconciliation banner ──
+  // If current week has a recon warning, show it so silent inconsistencies
+  // become visible to the CEO. Hidden during baseline transition (FIX C).
+  const reconWarnings = (c.warnings || []).filter(w => /reconcil|net growth/i.test(String(w)));
+  const reconBanner = (reconWarnings.length && canCompareWoW) ? `
+    <div class="recon-banner">
+      <div class="recon-banner-icon">!</div>
+      <div>
+        <div class="recon-banner-title">Data reconciliation note</div>
+        <div class="recon-banner-text">${reconWarnings[0]}</div>
+      </div>
+    </div>` : '';
+
+  // ─── FIX C: Methodology transition note (one-time, this week only) ──
+  // Suppressed once previous week is also corrected.
+  const baselineNote = (currentCorrected && p && !previousCorrected) ? `
+    <div class="recon-banner" style="background:var(--green-light);border-color:var(--green)">
+      <div class="recon-banner-icon" style="background:var(--green)">✓</div>
+      <div>
+        <div class="recon-banner-title" style="color:var(--green)">Methodology baseline reset this week</div>
+        <div class="recon-banner-text">Founder count is now sourced from <code>07_retention_management.csv</code> filtered to Active+Founder. Last week's saved figure used the older method, so "vs last week" comparisons are hidden for this week only. Comparisons return automatically next week.</div>
+      </div>
+    </div>` : '';
+
   // ─── TAB: OVERVIEW ──────────────────────────────────────────────
   const tabOverview = `
+    ${baselineNote}
+    ${reconBanner}
     <div class="g3" style="margin-bottom:20px">
       ${pulse('MRR', fmtC(r.mrr), (m.active_count||0) + ' members × $' + FOUNDER_PRICE, 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
       ${pulse('Founder Members', m.active_count||'—', (800-(m.active_count||0))+' to full capacity', 'var(--ink)', wow(m.active_count, p?.membership?.active_count, false))}
@@ -1078,7 +1122,15 @@ function aggregateData() {
 
   const salesRows    = get('01_sales');
   const autopayRows  = get('02_autopay');
-  const cancelRows   = get('04_members_cancelled');
+
+  // ─── FIX A: Filter out the "Total: N" footer row from cancelled CSV up front ──
+  // Mindbody appends a literal summary row with Name="Total: 11" and empty fields.
+  // It pollutes downstream count/parse logic if not removed.
+  const cancelRows = get('04_members_cancelled').filter(r => {
+    const name = String(r['Name']||'').trim().toLowerCase();
+    return name && !name.startsWith('total:') && !name.startsWith('total ');
+  });
+
   const firstRows    = get('05_first_visit');
   const noReturnRows = get('06_no_return');
   const retMgmtRows  = get('07_retention_management');
@@ -1122,7 +1174,7 @@ function aggregateData() {
   const weekStart = new Date(wsY, wsM - 1, wsD, 0, 0, 0, 0);
   const weekEnd = new Date(wsY, wsM - 1, wsD + 6, 23, 59, 59, 999);
 
-  // FIX 1: Active Founder count from 07_retention_management
+  // Active Founder count from 07_retention_management
   const activeFounderRows = retMgmtRows.filter(r => {
     const status = (r['Status']||'').trim();
     const type   = (r['Membership Type']||'').trim();
@@ -1130,17 +1182,17 @@ function aggregateData() {
   });
   const active_count = activeFounderRows.length;
 
-  // FIX 2: MRR = active_count × $200
+  // MRR = active_count × $200
   const mrr = active_count * FOUNDER_PRICE;
 
-  // FIX 3: Pack & Class Sales — exclude Founder Membership purchases
+  // Pack & Class Sales — exclude Founder Membership purchases
   const non_autopay_total = salesRows.reduce((s,r) => {
     const item = (r['Item name']||'').trim();
     if (item.toLowerCase().includes('founder')) return s;
     return s + toNum(r['Item Total'] || r['Total'] || r['Amount'] || 0);
   }, 0);
 
-  // FIX 4: Weekly Sales = MRR + non-autopay
+  // Weekly Sales = MRR + non-autopay
   const total_weekly_revenue = mrr + non_autopay_total;
 
   // Failed Founder payments
@@ -1286,7 +1338,6 @@ function aggregateData() {
     }));
 
   const cancelled_members = cancelRows
-    .filter(r => r['Name'] && !r['Name'].toLowerCase().startsWith('total:'))
     .map(r => {
       const name   = (r['Name']||'').trim();
       const enrich = founderMap[name.toLowerCase()] || {};
@@ -1512,6 +1563,31 @@ async function processFiles() {
     current.membership.progress_to_800_pct = Math.round(browserData.active_count / 800 * 100);
     current.membership.failed_payment_count = browserData.failed_payments?.length || 0;
 
+    // ─── FIX B: Reconciliation warning ──
+    // If we have a previous week, compare headcount delta against (new - churned).
+    // When they disagree, the dashboard surfaces it as a banner instead of silently
+    // rendering inconsistent numbers. Skipped during baseline transition (one-shot).
+    current.warnings = Array.isArray(current.warnings) ? current.warnings : [];
+    const prevForRecon = state.allWeeksData
+      .filter(w => w.week_of !== current.week_of && w.baseline_corrected === true)
+      .sort((a,b) => a.week_of > b.week_of ? 1 : -1)
+      .slice(-1)[0];
+    if (prevForRecon) {
+      const headcountDelta = current.membership.active_count - (prevForRecon.membership?.active_count || 0);
+      const claimedNet     = current.membership.net_growth;
+      if (headcountDelta !== claimedNet) {
+        const diff = claimedNet - headcountDelta;
+        current.warnings.push(
+          'Net growth mismatch: headcount changed by ' + (headcountDelta>0?'+':'') + headcountDelta +
+          ' but new minus churned = ' + (claimedNet>0?'+':'') + claimedNet +
+          '. ' + Math.abs(diff) + ' member(s) unaccounted for — likely failed payments moved to Suspended status.'
+        );
+      }
+    }
+
+    // ─── FIX C: Mark this row as baseline-corrected ──
+    current.baseline_corrected = true;
+
     await fetch('/api/save', {
       method:  'POST',
       headers: {'Content-Type':'application/json'},
@@ -1527,7 +1603,7 @@ async function processFiles() {
     const newPrevious  = newIdx > 0 ? state.allWeeksData[newIdx - 1] : null;
     state.dashData     = { current, previous: newPrevious };
 
-    state.freshUpload  = true; // ← FIX: lock in this data, block background re-fetch from overwriting
+    state.freshUpload  = true;
 
     state.processing = false;
     state.view = 'dashboard';
@@ -1757,8 +1833,6 @@ async function init() {
     state.view         = 'dashboard';
     render();
 
-    // Background: load all historical weeks for Trends tab
-    // FIX: if user already processed new files this session, don't overwrite their fresh data
     try {
       const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
       const weeks = (weeksData.weeks || []).sort((a,b) => a.week_of > b.week_of ? 1 : -1);
@@ -1770,7 +1844,6 @@ async function init() {
         } catch {}
       }
       if (allData.length && !state.freshUpload) {
-        // ↑ FIX: only overwrite dashData if user hasn't done a fresh upload this session
         allData.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
         state.allWeeksData = allData;
         state.weeks        = allData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
@@ -1780,16 +1853,13 @@ async function init() {
         state.selectedWeek = trueLatest.week_of;
         render();
       } else if (allData.length && state.freshUpload) {
-        // Still update allWeeksData for Trends tab, but don't touch dashData or re-render
         allData.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
-        // Merge: keep the fresh upload in allWeeksData, update historical weeks around it
         const freshWeek = state.dashData?.current?.week_of;
         const merged = allData.map(w => w.week_of === freshWeek ? state.dashData.current : w);
         if (!merged.find(w => w.week_of === freshWeek)) merged.push(state.dashData.current);
         merged.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
         state.allWeeksData = merged;
         state.weeks        = merged.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
-        // No render() call — dashData stays as-is
       }
     } catch {}
 
