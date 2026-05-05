@@ -6,21 +6,22 @@
 <title>Prana Wellness — CEO Dashboard</title>
 <!--
 ═══════════════════════════════════════════════════════════════════
-  CHANGELOG (2026-04-29)
+  CHANGELOG (2026-05-04)
   ────────────────────────────────────────────────────────────────
-  FIX A: Cancelled CSV "Total: N" footer row now filtered
-         explicitly at the top of the cancelled parse pipeline.
-  FIX B: Reconciliation warning — when previous week active_count
-         delta doesn't match (new - churned), surface a warning
-         banner on the dashboard so silent data inconsistencies
-         become visible.
-  FIX C: baseline_corrected flag — every saved row from now on
-         carries baseline_corrected:true. The wow() comparator
-         hides "vs last week" deltas when comparing a corrected
-         row against an uncorrected legacy row, so this week's
-         clean numbers don't show fake regression against last
-         week's pre-fix saved data. Once two corrected weeks
-         exist, comparisons return automatically.
+  FIX D: Phone resolution. Was reading only Home phone from
+         07_retention_management.csv (mostly empty for Founder
+         Members). Now prefers Mobile phone from
+         03_members_active.csv — by ID first, then by name —
+         falling back to Home phone from 07. Applied to both
+         founderMap (drives Dorian list + Payment Issues) and
+         new_founder_members.
+  ────────────────────────────────────────────────────────────────
+  Previous changes (2026-04-29):
+  FIX A: Cancelled CSV "Total: N" footer row filtered.
+  FIX B: Reconciliation warning when active_count delta
+         disagrees with (new - churned).
+  FIX C: baseline_corrected flag suppresses fake WoW regression
+         during methodology transition.
   ────────────────────────────────────────────────────────────────
   Previous changes (2026-04-28):
   Race condition in init() — background read_weeks fetch was
@@ -1122,6 +1123,7 @@ function aggregateData() {
 
   const salesRows    = get('01_sales');
   const autopayRows  = get('02_autopay');
+  const activeRows   = get('03_members_active');
 
   // ─── FIX A: Filter out the "Total: N" footer row from cancelled CSV up front ──
   // Mindbody appends a literal summary row with Name="Total: 11" and empty fields.
@@ -1136,6 +1138,35 @@ function aggregateData() {
   const retMgmtRows  = get('07_retention_management');
   const attendRows   = get('09_attendance_analysis');
   const noRevRows    = get('10_attendance_no_revenue');
+
+  // ─── FIX D: Build phone lookup from 03_members_active.csv ──
+  // Mobile phone is the source of truth for Founder Members.
+  // Home phone in 07_retention_management is largely empty.
+  // Lookup by ID first (most reliable), then by name as fallback.
+  const mobileById = {};
+  const mobileByName = {};
+  activeRows.forEach(r => {
+    const mobile = String(r['Mobile phone']||'').trim();
+    if (!mobile || mobile === '-') return;
+    const id = String(r['ID']||'').trim();
+    const fn = String(r['First name']||'').trim().toLowerCase();
+    const ln = String(r['Last name']||'').trim().toLowerCase();
+    if (id) mobileById[id] = mobile;
+    if (fn || ln) mobileByName[fn + '|' + ln] = mobile;
+  });
+  // Phone resolver: prefer mobile from 03 (by ID, then by name),
+  // fall back to home phone from 07, otherwise empty.
+  function resolvePhone(row) {
+    const id = String(row['ID']||'').trim();
+    if (id && mobileById[id]) return mobileById[id];
+    const fn = String(row['First name']||'').trim().toLowerCase();
+    const ln = String(row['Last name']||'').trim().toLowerCase();
+    const byName = mobileByName[fn + '|' + ln];
+    if (byName) return byName;
+    const home = String(row['Home phone']||'').trim();
+    if (home && home !== '-') return home;
+    return '';
+  }
 
   // ── Determine week ──
   let weekOf;
@@ -1254,8 +1285,9 @@ function aggregateData() {
     if (freeze) health = 'frozen';
     else if (c30 === 0 || daysAbsent >= 21) health = 'red';
     else if (c30 <= 2) health = 'amber';
+    // FIX D: phone now resolved from 03_members_active.csv (Mobile) first.
     founderMap[name.toLowerCase()] = {
-      name, email: (r['Email']||'').trim(), phone: (r['Home phone']||'').trim(),
+      name, email: (r['Email']||'').trim(), phone: resolvePhone(r),
       membership: (r['Membership Type']||'Founder Member').trim(),
       member_since: r['Member Since']||'', checkins_30: c30, checkins_ytd: cYTD,
       last_visit: lv, days_absent: daysAbsent, health, freeze,
@@ -1322,6 +1354,7 @@ function aggregateData() {
       };
     });
 
+  // FIX D: phone now resolved from 03_members_active.csv (Mobile) first.
   const new_founder_members = retMgmtRows
     .filter(r => {
       const status = (r['Status']||'').trim();
@@ -1331,7 +1364,7 @@ function aggregateData() {
     .filter(r => { try { return new Date(r['Member Since']) >= weekStart; } catch { return false; } })
     .map(r => ({
       name: ((r['First name']||'').trim()+' '+(r['Last name']||'').trim()).trim(),
-      email: (r['Email']||'').trim(), phone: (r['Home phone']||'').trim(),
+      email: (r['Email']||'').trim(), phone: resolvePhone(r),
       membership: (r['Membership Type']||'Founder Member').trim(),
       member_since: r['Member Since']||'',
       visits_so_far: parseInt(r['Check Ins YTD']||'0')||0,
