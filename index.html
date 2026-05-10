@@ -166,6 +166,40 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .recon-banner-icon{width:24px;height:24px;border-radius:50%;background:var(--amber);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
 .recon-banner-title{font-size:12px;font-weight:600;color:var(--amber);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px}
 .recon-banner-text{font-size:13px;color:var(--ink-2);line-height:1.6}
+
+.chat-shell{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+.chat-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden}
+.chat-thread{height:560px;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;background:linear-gradient(180deg,var(--surface) 0%,var(--bg) 100%)}
+.chat-message{max-width:82%;border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;font-size:14px;line-height:1.6;white-space:pre-wrap}
+.chat-message.user{align-self:flex-end;background:var(--green);border-color:var(--green);color:#fff}
+.chat-message.assistant{align-self:flex-start;background:var(--surface);color:var(--ink)}
+.chat-message.system{max-width:100%;align-self:center;background:var(--green-light);border-color:var(--green);color:var(--green);font-size:13px;text-align:center}
+.chat-composer{border-top:1px solid var(--border);padding:12px;background:var(--surface);display:flex;gap:10px;align-items:flex-end}
+.chat-input{flex:1;min-height:44px;max-height:120px;resize:vertical;border:1px solid var(--border);border-radius:var(--radius);padding:11px 12px;font-family:var(--body);font-size:14px;line-height:1.4;color:var(--ink);background:var(--surface)}
+.chat-input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px var(--green-light)}
+.chat-submit{width:44px;height:44px;border:none;border-radius:var(--radius);background:var(--green);color:#fff;font-size:18px;font-weight:600;cursor:pointer;flex-shrink:0}
+.chat-submit:disabled{opacity:0.45;cursor:not-allowed}
+.chat-side{display:flex;flex-direction:column;gap:12px}
+.chat-context{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow)}
+.chat-context-title{font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:12px}
+.chat-stat{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--border);font-size:13px}
+.chat-stat:first-of-type{border-top:none}
+.chat-stat span:first-child{color:var(--ink-3)}
+.chat-stat span:last-child{font-family:var(--mono);color:var(--ink);text-align:right}
+.chat-chip-row{display:flex;flex-wrap:wrap;gap:8px}
+.chat-chip{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:7px 11px;font-size:12px;color:var(--ink-2);cursor:pointer;font-family:var(--body);text-align:left}
+.chat-chip:hover{border-color:var(--green);color:var(--green);background:var(--green-light)}
+@media(max-width:860px){
+  .chat-shell{grid-template-columns:1fr}
+  .chat-thread{height:480px}
+  .chat-side{order:-1}
+}
+@media(max-width:520px){
+  .chat-thread{height:420px;padding:14px}
+  .chat-message{max-width:94%;font-size:13px}
+  .chat-composer{flex-direction:column;align-items:stretch}
+  .chat-submit{width:100%}
+}
 </style>
 </head>
 <body>
@@ -203,6 +237,8 @@ let state = {
   selectedWeek: null,
   allWeeksData: [],
   allWeeksLoading: false,
+  chatMessages: [],
+  chatLoading: false,
   error: null,
   freshUpload: false,
 };
@@ -355,6 +391,11 @@ function renderUpload() {
 // ─── Helpers ─────────────────────────────────────────────────────
 function fmtC(n) { return '$' + (n||0).toLocaleString(); }
 function fmtPct(n) { return (n||0) + '%'; }
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, ch => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[ch]));
+}
 function metricCard(label, value, sub, accentColor) {
   const color = accentColor || 'var(--ink)';
   return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;box-shadow:var(--shadow)">
@@ -419,6 +460,7 @@ function renderDashboard() {
     {id:'revenue',  label:'Revenue'},
     {id:'classes',  label:'Classes'},
     {id:'trends',   label:'Trends'},
+    {id:'chat',     label:'Chat'},
   ];
 
   const tabNav = `
@@ -729,7 +771,7 @@ function renderDashboard() {
       </div>
     </div>`;
 
-  const tabContent = {overview:tabOverview, members:tabMembers, revenue:tabRevenue, classes:tabClasses, trends:renderTrends()}[tab] || tabOverview;
+  const tabContent = {overview:tabOverview, members:tabMembers, revenue:tabRevenue, classes:tabClasses, trends:renderTrends(), chat:renderDataChat()}[tab] || tabOverview;
 
   return `
   <div style="max-width:1100px;margin:0 auto;padding:24px 16px 0" class="fu">
@@ -754,6 +796,115 @@ function renderDashboard() {
     <div style="padding-bottom:8px">${tabContent}</div>
   </div>
   <div style="height:24px"></div>`;
+}
+
+// ─── Data chat ───────────────────────────────────────────────────
+function renderDataChat() {
+  const c = state.dashData?.current || {};
+  const r = c.revenue || {};
+  const m = c.membership || {};
+  const hs = c.health_summary || {};
+  const messages = state.chatMessages || [];
+  const samples = [
+    'What changed most versus last week?',
+    'Which retention risks should Dorian handle first?',
+    'How healthy is recurring revenue?',
+    'What classes or time slots need a decision?'
+  ];
+
+  const intro = messages.length ? '' : `
+    <div class="chat-message system">
+      Ask about this week, trends, revenue, member health, failed payments, classes, or Dorian's action list.
+    </div>`;
+
+  return `
+  <div class="chat-shell">
+    <div class="chat-panel">
+      <div class="chat-thread" id="chatThread">
+        ${intro}
+        ${messages.map(msg => `
+          <div class="chat-message ${msg.role === 'user' ? 'user' : 'assistant'}">${esc(msg.content)}</div>
+        `).join('')}
+        ${state.chatLoading ? '<div class="chat-message assistant"><span class="spinner" style="display:inline-block;width:14px;height:14px;margin-right:8px;vertical-align:-2px"></span>Reading the dashboard data...</div>' : ''}
+      </div>
+      <form class="chat-composer" id="chatForm">
+        <textarea class="chat-input" id="chatInput" rows="2" placeholder="Ask a question about the dashboard data..." ${state.chatLoading ? 'disabled' : ''}></textarea>
+        <button class="chat-submit" type="submit" title="Send" ${state.chatLoading ? 'disabled' : ''}>↗</button>
+      </form>
+    </div>
+
+    <div class="chat-side">
+      <div class="chat-context">
+        <div class="chat-context-title">Current Context</div>
+        <div class="chat-stat"><span>Week</span><span>${esc(c.week_of || '—')}</span></div>
+        <div class="chat-stat"><span>MRR</span><span>${fmtC(r.mrr || 0)}</span></div>
+        <div class="chat-stat"><span>Founder Members</span><span>${m.active_count || 0}</span></div>
+        <div class="chat-stat"><span>Net Growth</span><span>${(m.net_growth || 0) > 0 ? '+' : ''}${m.net_growth || 0}</span></div>
+        <div class="chat-stat"><span>At Risk / Urgent</span><span>${hs.amber || 0} / ${hs.red || 0}</span></div>
+        <div class="chat-stat"><span>History Loaded</span><span>${state.allWeeksData.length} week${state.allWeeksData.length === 1 ? '' : 's'}</span></div>
+      </div>
+      <div class="chat-context">
+        <div class="chat-context-title">Quick Questions</div>
+        <div class="chat-chip-row">
+          ${samples.map(q => `<button class="chat-chip" type="button" onclick="askChatQuestion('${q.replace(/'/g, "\\'")}')">${q}</button>`).join('')}
+        </div>
+      </div>
+      ${messages.length ? `
+      <button class="btn-secondary" type="button" onclick="clearDataChat()" style="width:100%">Clear Chat</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function buildChatPayload(question) {
+  const current = state.dashData?.current || {};
+  const previous = state.dashData?.previous || null;
+  const history = (state.allWeeksData || [])
+    .filter(w => w && w.week_of)
+    .sort((a,b) => a.week_of > b.week_of ? 1 : -1)
+    .slice(-12);
+  return {
+    question,
+    current,
+    previous,
+    history,
+    messages: (state.chatMessages || []).slice(0, -1).slice(-8),
+  };
+}
+
+async function submitChatQuestion(question) {
+  const q = String(question || '').trim();
+  if (!q || state.chatLoading) return;
+  state.chatMessages = [...(state.chatMessages || []), { role:'user', content:q }];
+  state.chatLoading = true;
+  render();
+
+  try {
+    const res = await fetch('/api/chat', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(buildChatPayload(q))
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Chat failed');
+    state.chatMessages = [...state.chatMessages, { role:'assistant', content:data.answer }];
+  } catch(err) {
+    state.chatMessages = [...state.chatMessages, {
+      role:'assistant',
+      content:'I could not answer that yet: ' + (err.message || 'unknown error') + '.'
+    }];
+  }
+
+  state.chatLoading = false;
+  render();
+}
+
+function askChatQuestion(question) {
+  submitChatQuestion(question);
+}
+
+function clearDataChat() {
+  state.chatMessages = [];
+  render();
 }
 
 // ─── Health summary ──────────────────────────────────────────────
@@ -1035,6 +1186,16 @@ function renderHeader() {
 function bindEvents() {
   const processBtn = document.getElementById('processBtn');
   if (processBtn) processBtn.onclick = processFiles;
+  const chatForm = document.getElementById('chatForm');
+  if (chatForm) {
+    chatForm.onsubmit = e => {
+      e.preventDefault();
+      const input = document.getElementById('chatInput');
+      submitChatQuestion(input?.value || '');
+    };
+    const thread = document.getElementById('chatThread');
+    if (thread) thread.scrollTop = thread.scrollHeight;
+  }
   const fileInput = document.getElementById('fileInput');
   if (fileInput) fileInput.onchange = handleFiles;
   const dropZone = document.getElementById('dropZone');
