@@ -102,6 +102,7 @@ function compactWeek(week) {
     failed_payments: takeList(week.failed_payments, 12),
     new_founder_members: takeList(week.new_founder_members, 12),
     class_data: takeList(week.class_data, 12),
+    class_schedule: takeList(week.class_schedule, 60),
     instructor_data: takeList(week.instructor_data, 8),
     peak_times: takeList(week.peak_times, 6),
     peak_days: takeList(week.peak_days, 7),
@@ -141,6 +142,7 @@ Business rules:
 - MRR is active Founder Members multiplied by $200/month. Do not invent another formula.
 - Weekly Sales means MRR plus non-autopay revenue.
 - Reformer Pilates is not included in Founder Membership and should be treated as a separate paid service.
+- class_schedule is optional uploaded current schedule data. When present, use it for concrete class schedule recommendations and compare it against class_data attendance patterns.
 - Format answers in clean markdown for scanning.
 - Use bold labels for scannability, for example **Revenue:** or **Next move:**.
 - Do not use tables unless the user explicitly asks for one.

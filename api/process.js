@@ -63,6 +63,7 @@ export default async function handler(req, res) {
       cancelled_members:   (data.cancelled_members   || []).slice(0, 5),
       new_founder_members: (data.new_founder_members || []).slice(0, 5),
       class_data:          (data.class_data          || []).slice(0, 10),
+      class_schedule:      (data.class_schedule      || []).slice(0, 60),
       founder_classes:     (data.founder_classes     || []).slice(0, 5),
       instructor_data:     (data.instructor_data     || []).slice(0, 5),
       peak_times:          (data.peak_times          || []).slice(0, 5),
@@ -161,6 +162,7 @@ IMPORTANT DATA NOTES:
 - failed_payments = Founder Members whose autopay charge was Suspended or Declined this week — these are revenue at risk
 - total_sessions = total class sessions held this week (denominator for "average attendance per session")
 - avg_per_session = total_visits ÷ total_sessions (typical class size — use this NOT total visits when discussing class performance)
+- class_schedule = optional current schedule CSV, normalized as class name, day/date, time, instructor, room, capacity, booked, waitlist. Use it to compare current attendance patterns against what is actually on the schedule.
 
 CALCULATION RULES:
 - mrr is already calculated; do NOT recompute
@@ -187,6 +189,7 @@ CLASS LANGUAGE RULES (avoid the old "98" bug):
 - When commenting on whether a class underperforms, compare its per-session attendance to avg_per_session, NOT to total_visits.
 - Example phrasing: "Yoga Sculpt averaged 8.5 attendees per session vs studio average of ${'${avg_per_session}'}/session"
 - Never say "less than half of 98" — 98 was actually the count of sessions, not attendance.
+- If class_schedule exists, use it for tactical schedule decisions: keep, add, cut, move, or staff classes based on uploaded schedule plus attendance demand.
 
 ${data.previous_week ? `PREVIOUS WEEK DATA (use for trajectory analysis):
 ${JSON.stringify(data.previous_week)}` : 'No previous week data — this is the first upload.'}

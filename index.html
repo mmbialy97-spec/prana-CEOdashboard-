@@ -87,7 +87,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 
 .drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:36px 24px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg)}
 .drop-zone.active{border-color:var(--green);background:var(--green-light)}
-.drop-zone.done{border-color:var(--green);border-style:solid;background:var(--green-light);cursor:default}
+.drop-zone.done{border-color:var(--green);border-style:solid;background:var(--green-light);cursor:pointer}
 .drop-icon{color:var(--ink-3);margin-bottom:8px}
 .drop-title{font-weight:500;font-size:15px;color:var(--ink);margin-bottom:4px}
 .drop-sub{font-size:13px;color:var(--ink-3)}
@@ -241,7 +241,16 @@ const EXPECTED = [
   {key:'11_attendance_with_revenue',label:'Attendance with Revenue',    group:'Attendance'},
   {key:'12_class_visit',            label:'Class Visit Report',         group:'Attendance'},
 ];
+const OPTIONAL = [
+  {
+    key:'13_class_schedule',
+    label:'Current Class Schedule',
+    group:'Schedule',
+    aliases:['class_schedule','current_class_schedule','schedule','classes_schedule','13_class_schedule']
+  },
+];
 const GROUPS = ['Revenue','Membership','Attendance'];
+const REQUIRED_COUNT = EXPECTED.length;
 
 const FOUNDER_PRICE = 200;
 
@@ -304,8 +313,9 @@ function renderEmpty() {
 
 function renderUpload() {
   const loaded   = EXPECTED.filter(e => state.fileMap[e.key]?.status === 'ok').length;
-  const allReady = loaded === 12;
-  const errors   = EXPECTED.filter(e => state.fileMap[e.key]?.status === 'error').length;
+  const allReady = loaded === REQUIRED_COUNT;
+  const optionalLoaded = OPTIONAL.filter(e => state.fileMap[e.key]?.status === 'ok').length;
+  const errors   = [...EXPECTED, ...OPTIONAL].filter(e => state.fileMap[e.key]?.status === 'error').length;
   const unknown  = Object.entries(state.fileMap).filter(([k]) => k.startsWith('__unknown__')).map(([,v]) => v);
 
   if (state.processing) {
@@ -316,7 +326,7 @@ function renderUpload() {
         <div class="processing">
           <div class="processing-spinner"></div>
           <div class="processing-title">Analysing your data…</div>
-          <div class="processing-sub">Claude is reading all 12 reports and building your dashboard.<br>This takes about 15–20 seconds.</div>
+          <div class="processing-sub">Claude is reading the reports and building your dashboard.<br>This takes about 15–20 seconds.</div>
         </div>
       </div>
     </div>`;
@@ -329,7 +339,7 @@ function renderUpload() {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <div>
         <div style="font-family:var(--display);font-size:20px;color:var(--ink)">Upload Weekly Reports</div>
-        <div style="font-size:13px;color:var(--ink-3);margin-top:3px">Select all 12 CSV files at once</div>
+        <div style="font-size:13px;color:var(--ink-3);margin-top:3px">Select all ${REQUIRED_COUNT} weekly CSVs, plus optional class schedule</div>
       </div>
       <button class="btn-secondary" onclick="${state.dashData ? 'showDashboard()' : 'showEmpty()'}">← Back</button>
     </div>
@@ -340,8 +350,8 @@ function renderUpload() {
         <input type="file" id="fileInput" multiple accept=".csv" style="display:none">
         ${allReady ? `
           <div class="done-icon">✓</div>
-          <div class="done-title">All 12 reports loaded</div>
-          <div class="done-sub" style="margin-top:4px">Ready to process</div>
+          <div class="done-title">All ${REQUIRED_COUNT} required reports loaded</div>
+          <div class="done-sub" style="margin-top:4px">${optionalLoaded ? 'Class schedule included · ' : ''}Ready to process</div>
         ` : `
           <div class="drop-icon">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -349,16 +359,16 @@ function renderUpload() {
               <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
           </div>
-          <div class="drop-title">${loaded === 0 ? 'Drop all 12 CSV files here' : `${loaded} of 12 loaded — add remaining files`}</div>
-          <div class="drop-sub">or click to browse · select all at once</div>
+          <div class="drop-title">${loaded === 0 ? `Drop all ${REQUIRED_COUNT} required CSV files here` : `${loaded} of ${REQUIRED_COUNT} required loaded — add remaining files`}</div>
+          <div class="drop-sub">optional: add current_class_schedule.csv too</div>
         `}
       </div>
 
       <div class="progress-wrap">
         <div class="progress-track">
-          <div class="progress-fill" style="width:${(loaded/12)*100}%"></div>
+          <div class="progress-fill" style="width:${(loaded/REQUIRED_COUNT)*100}%"></div>
         </div>
-        <div class="progress-label">${loaded} / 12</div>
+        <div class="progress-label">${loaded} / ${REQUIRED_COUNT}</div>
       </div>
 
       ${allReady ? '<button id="processBtn" class="btn-primary" style="width:100%;margin-top:16px">Save &amp; Build Dashboard</button>' : ''}
@@ -368,7 +378,7 @@ function renderUpload() {
       <div class="warn-box">
         <div class="warn-title">⚠ Unrecognised files — not loaded</div>
         ${unknown.map(f => `<div class="warn-file">${f.filename}</div>`).join('')}
-        <div class="warn-hint">Filenames must match exactly — check the report guide.</div>
+        <div class="warn-hint">Required filenames must match exactly. Schedule accepts current_class_schedule.csv, class_schedule.csv, schedule.csv, or 13_class_schedule.csv.</div>
       </div>
     ` : ''}
 
@@ -398,6 +408,25 @@ function renderUpload() {
         </div>
       </div>
     `).join('')}
+
+    <div class="card">
+      <div class="card-label">Optional Data</div>
+      <div class="file-grid">
+        ${OPTIONAL.map(({key, label}) => {
+          const entry  = state.fileMap[key];
+          const status = entry?.status ?? 'waiting';
+          return `
+          <div class="file-row ${status === 'ok' ? 'ok' : status === 'error' ? 'error' : ''}">
+            <span class="dot" style="background:${status === 'ok' ? 'var(--green)' : status === 'error' ? 'var(--red)' : 'transparent'};border:${status === 'waiting' ? '1.5px dashed var(--ink-3)' : 'none'}"></span>
+            <div class="file-name">${label}</div>
+            <div class="file-key">current_class_schedule.csv</div>
+            ${status === 'ok'    ? `<div class="file-rows">${entry.rows.length} rows</div>` : ''}
+            ${status === 'error' ? `<div class="file-err">parse error</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--ink-3);line-height:1.5;margin-top:10px">Used by Chat and Classes to compare actual attendance against the current schedule.</div>
+    </div>
 
     ${state.error ? `
       <div class="warn-box" style="border-color:var(--red);background:var(--red-light)">
@@ -698,6 +727,7 @@ function renderDashboard() {
   const peakTimes  = c.peak_times      || [];
   const peakDays   = c.peak_days       || [];
   const allClasses = c.class_data      || [];
+  const schedule    = c.class_schedule  || [];
   const maxVisits  = allClasses.length ? allClasses[0].visits : 1;
 
   const totalSessions  = c.total_sessions || 0;
@@ -776,7 +806,43 @@ function renderDashboard() {
       </div>
     </div>` : '';
 
+  const scheduleByDay = schedule.reduce((acc,row) => {
+    const day = row.day || 'Unscheduled';
+    if (!acc[day]) acc[day] = [];
+    acc[day].push(row);
+    return acc;
+  }, {});
+  const scheduleDays = Object.keys(scheduleByDay).sort((a,b) => {
+    const order = {Monday:1,Tuesday:2,Wednesday:3,Thursday:4,Friday:5,Saturday:6,Sunday:7,Unscheduled:99};
+    return (order[a] || 90) - (order[b] || 90);
+  });
+  const scheduleBlock = schedule.length ? `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-bottom:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Current Class Schedule</div>
+          <div style="font-size:11px;color:var(--ink-3)">${schedule.length} scheduled class${schedule.length===1?'':'es'} uploaded · used by Chat</div>
+        </div>
+        <div style="font-family:var(--mono);font-size:12px;color:var(--green)">${scheduleDays.length} day${scheduleDays.length===1?'':'s'}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+        ${scheduleDays.slice(0,7).map(day => `
+          <div style="border:1px solid var(--border);border-radius:var(--radius);padding:12px;background:var(--bg)">
+            <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">${day}</div>
+            ${scheduleByDay[day].slice(0,5).map(row => `
+              <div style="padding:7px 0;border-top:1px solid var(--border)">
+                <div style="font-size:12px;font-weight:600;color:var(--ink);line-height:1.35">${esc(row.name || 'Class')}</div>
+                <div style="font-size:11px;color:var(--ink-3);line-height:1.45">${[row.time, row.instructor, row.room].filter(Boolean).map(esc).join(' · ')}</div>
+                ${(row.capacity || row.booked || row.waitlist) ? `<div style="font-size:10px;color:var(--ink-3);margin-top:2px">${row.booked ? row.booked + ' booked' : ''}${row.capacity ? ' / ' + row.capacity + ' cap' : ''}${row.waitlist ? ' · ' + row.waitlist + ' waitlist' : ''}</div>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        `).join('')}
+      </div>
+    </div>` : '';
+
   const tabClasses = `
+    ${scheduleBlock}
     ${classInsightsBlock}
     <div class="g4" style="margin-bottom:16px">
       ${pulse('Total Check-ins', totalVisits.toLocaleString(), totalSessions + ' sessions · ' + avgPerSession + ' avg/session', 'var(--ink)')}
@@ -927,6 +993,7 @@ function renderDataChat() {
         <div class="chat-stat"><span>Founder Members</span><span>${m.active_count || 0}</span></div>
         <div class="chat-stat"><span>Net Growth</span><span>${(m.net_growth || 0) > 0 ? '+' : ''}${m.net_growth || 0}</span></div>
         <div class="chat-stat"><span>At Risk / Urgent</span><span>${hs.amber || 0} / ${hs.red || 0}</span></div>
+        <div class="chat-stat"><span>Schedule Rows</span><span>${(c.class_schedule || []).length || '—'}</span></div>
         <div class="chat-stat"><span>History Loaded</span><span>${state.allWeeksData.length} week${state.allWeeksData.length === 1 ? '' : 's'}</span></div>
       </div>
       <div class="chat-context">
@@ -1287,8 +1354,7 @@ function bindEvents() {
   const dropZone = document.getElementById('dropZone');
   if (dropZone) {
     dropZone.onclick = () => {
-      const loaded = EXPECTED.filter(e => state.fileMap[e.key]?.status === 'ok').length;
-      if (loaded < 12) document.getElementById('fileInput')?.click();
+      document.getElementById('fileInput')?.click();
     };
     dropZone.ondragover  = handleDragOver;
     dropZone.ondragleave = handleDragLeave;
@@ -1307,8 +1373,9 @@ function handleFiles(e) { processRawFiles(Array.from(e.target.files)); }
 
 async function processRawFiles(rawFiles) {
   for (const file of rawFiles) {
-    const key   = file.name.replace(/\.csv$/i, '').trim();
-    const valid = EXPECTED.some(e => e.key === key);
+    const rawKey = file.name.replace(/\.csv$/i, '').trim();
+    const key = resolveUploadKey(rawKey);
+    const valid = Boolean(key);
     if (!valid) {
       state.fileMap['__unknown__' + file.name] = {status:'unknown', filename:file.name};
       continue;
@@ -1323,6 +1390,17 @@ async function processRawFiles(rawFiles) {
     }
   }
   render();
+}
+
+function resolveUploadKey(rawKey) {
+  const clean = String(rawKey || '').trim();
+  const lower = clean.toLowerCase().replace(/\s+/g, '_');
+  const required = EXPECTED.find(e => e.key.toLowerCase() === lower);
+  if (required) return required.key;
+  const optional = OPTIONAL.find(e =>
+    e.key.toLowerCase() === lower || (e.aliases || []).some(alias => alias.toLowerCase() === lower)
+  );
+  return optional ? optional.key : null;
 }
 
 // ─── AGGREGATE ────────────────────────────────────────────────────
@@ -1343,6 +1421,51 @@ function aggregateData() {
       return (parts[1]||'').trim() + ' ' + (parts[0]||'').trim();
     }
     return s;
+  }
+  function firstValue(row, names) {
+    for (const name of names) {
+      if (row[name] != null && String(row[name]).trim() !== '') return String(row[name]).trim();
+    }
+    const lowerMap = {};
+    Object.keys(row || {}).forEach(k => { lowerMap[k.toLowerCase().replace(/\s+/g,'_')] = k; });
+    for (const name of names) {
+      const key = lowerMap[String(name).toLowerCase().replace(/\s+/g,'_')];
+      if (key && row[key] != null && String(row[key]).trim() !== '') return String(row[key]).trim();
+    }
+    return '';
+  }
+  function normaliseScheduleRows(rows) {
+    const dayOrder = {monday:1,tuesday:2,wednesday:3,thursday:4,friday:5,saturday:6,sunday:7};
+    return (rows || []).map(r => {
+      const rawDate = firstValue(r, ['Date','Class Date','Start Date','Start date']);
+      let day = firstValue(r, ['Day','Day of Week','Weekday']);
+      if (!day && rawDate) {
+        const d = new Date(rawDate);
+        if (!isNaN(d)) day = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
+      }
+      const className = firstValue(r, ['Class','Class Name','Class name','Description','Service','Session Type','Type']);
+      const startTime = firstValue(r, ['Start Time','Start time','Time','Class Time','Begin Time']);
+      const endTime = firstValue(r, ['End Time','End time','Finish Time']);
+      const instructor = fixName(firstValue(r, ['Instructor','Teacher','Staff','Staff Name']));
+      const capacity = toNum(firstValue(r, ['Capacity','Max Capacity','Max','Spots','Total Spots']));
+      const booked = toNum(firstValue(r, ['Booked','Enrolled','Registered','Signups','Sign-ups','Reservations']));
+      const waitlist = toNum(firstValue(r, ['Waitlist','Wait List','Waitlisted']));
+      return {
+        day,
+        date: rawDate,
+        time: startTime,
+        end_time: endTime,
+        name: className,
+        instructor,
+        room: firstValue(r, ['Room','Location','Studio']),
+        capacity,
+        booked,
+        waitlist,
+        day_order: dayOrder[String(day).toLowerCase()] || 99,
+      };
+    })
+    .filter(r => r.name || r.day || r.time || r.instructor)
+    .sort((a,b) => (a.day_order - b.day_order) || String(a.time).localeCompare(String(b.time)) || String(a.name).localeCompare(String(b.name)));
   }
   function parseMDY(str) {
     if (!str) return null;
@@ -1385,6 +1508,8 @@ function aggregateData() {
   const retMgmtRows  = get('07_retention_management');
   const attendRows   = get('09_attendance_analysis');
   const noRevRows    = get('10_attendance_no_revenue');
+  const scheduleRows = get('13_class_schedule');
+  const class_schedule = normaliseScheduleRows(scheduleRows);
 
   // ─── FIX D: Build phone lookup from 03_members_active.csv ──
   // Mobile phone is the source of truth for Founder Members.
@@ -1760,6 +1885,7 @@ function aggregateData() {
     new_founder_members,
     cancelled_members,
     class_data,
+    class_schedule,
     health_summary,
     avg_founder_visits,
     founder_classes,
@@ -1772,7 +1898,7 @@ function aggregateData() {
 
 async function processFiles() {
   const allReady = EXPECTED.every(e => state.fileMap[e.key]?.status === 'ok');
-  if (!allReady) { alert('Please upload all 12 CSV files first.'); return; }
+  if (!allReady) { alert('Please upload all ' + REQUIRED_COUNT + ' required CSV files first.'); return; }
 
   state.processing = true;
   state.error = null;
@@ -1794,6 +1920,7 @@ async function processFiles() {
         mrr:           w.revenue?.mrr || 0,
         avg_visits:    w.avg_founder_visits || 0,
         health:        w.health_summary || {},
+        scheduled_classes: w.class_schedule?.length || 0,
       }));
     browserData.history = historyForPrompt;
 
@@ -1818,6 +1945,7 @@ async function processFiles() {
     current.new_founder_members = browserData.new_founder_members;
     current.first_time_visitors = browserData.first_time_visitors;
     current.class_data          = browserData.class_data;
+    current.class_schedule      = browserData.class_schedule;
     current.dorian              = browserData.browser_dorian;
     current.failed_payments     = browserData.failed_payments;
     current.total_sessions      = browserData.total_sessions;
