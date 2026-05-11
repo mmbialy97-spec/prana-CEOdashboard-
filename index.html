@@ -546,6 +546,14 @@ function renderDashboard() {
   const currentCorrected  = c.baseline_corrected === true;
   const previousCorrected = p?.baseline_corrected === true;
   const canCompareWoW = !p ? false : (!currentCorrected || previousCorrected);
+  const currentActiveCount = Number(m.active_count);
+  const previousActiveCount = Number(p?.membership?.active_count);
+  if (canCompareWoW && Number.isFinite(currentActiveCount) && Number.isFinite(previousActiveCount)) {
+    const headcountDelta = currentActiveCount - previousActiveCount;
+    const flowNet = (m.new_this_week || 0) - (m.churned_this_week || 0);
+    m.net_growth = headcountDelta;
+    m.other_status_changes = headcountDelta - flowNet;
+  }
 
   const wow = (curr, prev, isC) => {
     if (!canCompareWoW || prev == null) return '';
@@ -555,6 +563,17 @@ function renderDashboard() {
     const sign  = diff > 0 ? '+' : '−';
     const val   = isC ? fmtC(Math.abs(diff)) : Math.abs(diff);
     return `<span style="font-size:11px;color:${color};font-weight:500;margin-left:6px">${sign}${val} vs last week</span>`;
+  };
+
+  const signed = (value) => (value > 0 ? '+' : '') + value;
+  const memberMovementSub = () => {
+    const parts = [
+      (m.new_this_week || 0) + ' joined',
+      (m.churned_this_week || 0) + ' churned'
+    ];
+    const other = m.other_status_changes || 0;
+    if (other) parts.push(signed(other) + ' status changes');
+    return parts.join(' · ');
   };
 
   const pulse = (label, value, sub, color, wowHtml) => `
@@ -584,7 +603,9 @@ function renderDashboard() {
   // ─── FIX B: Reconciliation banner ──
   // If current week has a recon warning, show it so silent inconsistencies
   // become visible to the CEO. Hidden during baseline transition (FIX C).
-  const reconWarnings = (c.warnings || []).filter(w => /reconcil|net growth/i.test(String(w)));
+  const reconWarnings = (c.warnings || [])
+    .filter(w => /reconcil|net growth/i.test(String(w)))
+    .filter(w => !/net growth mismatch|new minus churned/i.test(String(w)));
   const reconBanner = (reconWarnings.length && canCompareWoW) ? `
     <div class="recon-banner">
       <div class="recon-banner-icon">!</div>
@@ -612,7 +633,7 @@ function renderDashboard() {
     <div class="g3" style="margin-bottom:20px">
       ${pulse('MRR', fmtC(r.mrr), (m.active_count||0) + ' members × $' + FOUNDER_PRICE, 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
       ${pulse('Founder Members', m.active_count||'—', (800-(m.active_count||0))+' to full capacity', 'var(--ink)', wow(m.active_count, p?.membership?.active_count, false))}
-      ${pulse('Net Growth', (m.net_growth>0?'+':'')+m.net_growth, (m.new_this_week||0)+' joined · '+(m.churned_this_week||0)+' churned', (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
+      ${pulse('Net Growth', signed(m.net_growth||0), memberMovementSub(), (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
       ${pulse('Member Health', hs.green||0, '<span style="color:var(--amber)">●'+(hs.amber||0)+' at risk</span> &nbsp;<span style="color:var(--red)">●'+(hs.red||0)+' urgent</span>', 'var(--green)')}
       ${pulse('Avg Visits / Member', (c.avg_founder_visits||0)+'/wk', 'Target: 3+ per week', (c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)')}
       ${pulse('Forecasted ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
@@ -667,7 +688,7 @@ function renderDashboard() {
       ${pulse('Active Members', m.active_count||'—', 'Founder Members on autopay', 'var(--ink)')}
       ${pulse('New This Week', m.new_this_week||0, 'Joined as Founder Members', 'var(--green)')}
       ${pulse('Churned', m.churned_this_week||0, fmtPct(m.churn_rate_pct)+' churn rate', (m.churned_this_week||0)>0?'var(--red)':'var(--ink)')}
-      ${pulse('Net Growth', (m.net_growth>0?'+':'')+m.net_growth, 'New minus churned', (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
+      ${pulse('Net Growth', signed(m.net_growth||0), memberMovementSub(), (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
     </div>
 
     ${renderHealthSummary(c)}
@@ -1965,32 +1986,28 @@ async function processFiles() {
     current.membership.active_count = browserData.active_count;
     current.membership.new_this_week = browserData.first_visit_count;
     current.membership.churned_this_week = browserData.cancelled_count;
-    current.membership.net_growth = browserData.first_visit_count - browserData.cancelled_count;
+    const membershipFlowNet = browserData.first_visit_count - browserData.cancelled_count;
+    current.membership.net_growth = membershipFlowNet;
+    current.membership.other_status_changes = 0;
     current.membership.churn_rate_pct = browserData.active_count > 0
       ? Math.round(browserData.cancelled_count / browserData.active_count * 1000) / 10 : 0;
     current.membership.progress_to_800_pct = Math.round(browserData.active_count / 800 * 100);
     current.membership.failed_payment_count = browserData.failed_payments?.length || 0;
 
-    // ─── FIX B: Reconciliation warning ──
-    // If we have a previous week, compare headcount delta against (new - churned).
-    // When they disagree, the dashboard surfaces it as a banner instead of silently
-    // rendering inconsistent numbers. Skipped during baseline transition (one-shot).
-    current.warnings = Array.isArray(current.warnings) ? current.warnings : [];
+    // Net Growth is the actual active Founder headcount movement.
+    // New-minus-churn remains an operating flow detail; any remainder is status movement
+    // such as Suspended/Declined members returning to Active.
+    current.warnings = Array.isArray(current.warnings)
+      ? current.warnings.filter(w => !/net growth mismatch|new minus churned/i.test(String(w)))
+      : [];
     const prevForRecon = state.allWeeksData
       .filter(w => w.week_of !== current.week_of && w.baseline_corrected === true)
       .sort((a,b) => a.week_of > b.week_of ? 1 : -1)
       .slice(-1)[0];
     if (prevForRecon) {
       const headcountDelta = current.membership.active_count - (prevForRecon.membership?.active_count || 0);
-      const claimedNet     = current.membership.net_growth;
-      if (headcountDelta !== claimedNet) {
-        const diff = claimedNet - headcountDelta;
-        current.warnings.push(
-          'Net growth mismatch: headcount changed by ' + (headcountDelta>0?'+':'') + headcountDelta +
-          ' but new minus churned = ' + (claimedNet>0?'+':'') + claimedNet +
-          '. ' + Math.abs(diff) + ' member(s) unaccounted for — likely failed payments moved to Suspended status.'
-        );
-      }
+      current.membership.net_growth = headcountDelta;
+      current.membership.other_status_changes = headcountDelta - membershipFlowNet;
     }
 
     // ─── FIX C: Mark this row as baseline-corrected ──

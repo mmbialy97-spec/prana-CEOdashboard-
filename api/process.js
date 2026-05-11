@@ -52,6 +52,7 @@ export default async function handler(req, res) {
       active_count:        data.active_count,
       new_this_week:       data.first_visit_count,
       cancelled_count:     data.cancelled_count,
+      flow_net_growth:     data.first_visit_count - data.cancelled_count,
       first_time_visitors: data.first_time_visitors,
       no_show_count:       data.no_show_count,
       avg_founder_visits:  data.avg_founder_visits,
@@ -157,6 +158,7 @@ IMPORTANT DATA NOTES:
 - active_count = Founder Members from 07_retention_management filtered to Status=Active AND Membership Type contains 'Founder'
 - new_this_week = Founder Members who joined THIS WEEK ONLY (not cumulative)
 - cancelled_count = Founder Members who cancelled THIS WEEK ONLY (not cumulative)
+- flow_net_growth = new_this_week minus cancelled_count; this is acquisition/churn flow only
 - avg_founder_visits = average visits per Founder Member this week. Target is 3+/week.
 - health_summary = {green: 3+visits/month, amber: 1-2 visits/month, red: 0 visits or 21+ days absent}
 - failed_payments = Founder Members whose autopay charge was Suspended or Declined this week — these are revenue at risk
@@ -169,7 +171,8 @@ CALCULATION RULES:
 - pack_and_class = non_autopay_total
 - mrr_pct = round(mrr / total_weekly_revenue * 100)
 - revenue_per_member = round(total_weekly_revenue / active_count)  ← uses TOTAL revenue, not just MRR
-- net_growth = new_this_week minus cancelled_count
+- net_growth = active_count minus previous_week.active_count when previous_week exists; otherwise use flow_net_growth for the first upload only
+- If net_growth differs from flow_net_growth, the difference is other_status_changes caused by status movement such as Suspended/Declined members returning to Active. Do not call this a calculation mismatch.
 - churned_this_week = cancelled_count
 - churn_rate_pct = round(cancelled_count / active_count * 100, 1)
 - progress_to_800_pct = round(active_count / 800 * 100)
