@@ -6,8 +6,17 @@
 <title>Prana Wellness — CEO Dashboard</title>
 <!--
 ═══════════════════════════════════════════════════════════════════
-  CHANGELOG (2026-05-04)
+  CHANGELOG (2026-05-26)
   ────────────────────────────────────────────────────────────────
+  Membership product update:
+  - Active member logic now supports Founder, Prana, and Prana Plus.
+  - MRR uses tier pricing: Founder $200, Prana $249, Prana Plus $379.
+  - Member mix is displayed in the dashboard and legacy weeks fall
+    back to Founder counts when no product split was stored.
+  - Legacy JSON keys containing "founder" are kept for saved-data
+    compatibility but now represent all active paid members where noted.
+  ────────────────────────────────────────────────────────────────
+  Previous changes (2026-05-04):
   FIX D: Phone resolution. Was reading only Home phone from
          07_retention_management.csv (mostly empty for Founder
          Members). Now prefers Mobile phone from
@@ -230,7 +239,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 const EXPECTED = [
   {key:'01_sales',                  label:'Sales Report',               group:'Revenue'},
   {key:'02_autopay',                label:'Autopay Report',             group:'Revenue'},
-  {key:'03_members_active',         label:'Active Members',             group:'Membership'},
+  {key:'03_members_active',         label:'Active Members',             group:'Membership', aliases:['active_members','active members','active_memberships','active memberships','members_active','memberships_active','03_active_members','03_active_memberships']},
   {key:'04_members_cancelled',      label:'Cancelled Members',          group:'Membership'},
   {key:'05_first_visit',            label:'First Visit Report',         group:'Membership'},
   {key:'06_no_return',              label:'No Return Report',           group:'Membership'},
@@ -252,7 +261,12 @@ const OPTIONAL = [
 const GROUPS = ['Revenue','Membership','Attendance'];
 const REQUIRED_COUNT = EXPECTED.length;
 
-const FOUNDER_PRICE = 200;
+const DEFAULT_MEMBER_PRICE = 249;
+const MEMBER_PRODUCTS = [
+  {key:'founder', label:'Founder', price:200, aliases:['founder','founding','founder member','founder membership','founding member','founding membership']},
+  {key:'prana_plus', label:'Prana Plus', price:379, aliases:['prana plus','prana+','prana +','prana unlimited plus','prana membership plus','prana plus membership']},
+  {key:'prana', label:'Prana', price:249, aliases:['prana','prana membership','prana unlimited']},
+];
 
 // ─── State ────────────────────────────────────────────────────────
 let state = {
@@ -493,6 +507,22 @@ function formatAssistantAnswer(text) {
   closeList();
   return html || '<p>No answer returned.</p>';
 }
+function normProductText(value) {
+  return String(value || '').trim().toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ');
+}
+function parseMoney(value) {
+  const n = Number(String(value || '').replace(/[$,]/g,''));
+  return Number.isFinite(n) ? n : 0;
+}
+function memberProductFromText(value) {
+  const text = normProductText(value);
+  if (!text) return null;
+  const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => text.includes(alias)));
+  return product ? product.key : null;
+}
+function memberProductPrice(key) {
+  return MEMBER_PRODUCTS.find(p => p.key === key)?.price || DEFAULT_MEMBER_PRICE;
+}
 function renderChatMessage(msg) {
   if (msg.role === 'user') {
     return `<div class="chat-turn user-turn"><div class="chat-message user">${esc(msg.content)}</div></div>`;
@@ -536,10 +566,20 @@ function renderDashboard() {
   const intel  = c.intelligence  || {};
   const hs     = c.health_summary|| {};
   const tab    = state.tab       || 'overview';
+  const productCounts = c.member_product_counts || {};
+  const hasProductCounts = Object.keys(productCounts).length > 0;
+  const productCount = (label, key) => productCounts[label] ?? productCounts[key] ?? 0;
+  const founderCount = productCount('Founder', 'founder') || (!hasProductCounts ? (m.active_count || 0) : 0);
+  const pranaCount = productCount('Prana', 'prana');
+  const pranaPlusCount = productCount('Prana Plus', 'prana_plus');
+  const productSplitSub = hasProductCounts
+    ? `${founderCount} Founder · ${pranaCount} Prana · ${pranaPlusCount} Prana Plus`
+    : `${m.active_count || 0} Founder · legacy week`;
 
   const newFounders   = c.new_founder_members || [];
   const failed        = c.failed_payments || [];
-  const founderVisits = (c.founder_classes||[]).reduce((s,cl)=>s+(cl.founder_visits||0),0);
+  const memberVisits = (c.founder_classes||[]).reduce((s,cl)=>s+(cl.member_visits ?? cl.founder_visits ?? 0),0);
+  const avgMemberPrice = (m.active_count || 0) > 0 ? Math.round((r.mrr || 0) / m.active_count) : DEFAULT_MEMBER_PRICE;
 
   // ─── FIX C: Hide WoW deltas when comparing corrected current → uncorrected previous ──
   // Prevents fake regression signals during the methodology transition week.
@@ -582,6 +622,33 @@ function renderDashboard() {
       <div style="font-family:var(--display);font-size:28px;color:${color||'var(--ink)'};line-height:1.1">${value}</div>
       <div style="font-size:11px;color:var(--ink-3);margin-top:6px">${sub}${wowHtml||''}</div>
     </div>`;
+  const mixRows = [
+    {label:'Founder', count: founderCount, price:200},
+    {label:'Prana', count: pranaCount, price:249},
+    {label:'Prana Plus', count: pranaPlusCount, price:379},
+  ];
+  const maxMixCount = Math.max(...mixRows.map(row => row.count), 1);
+  const membershipMixCard = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:20px;box-shadow:var(--shadow)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:14px">
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase">Membership Breakdown</div>
+        <div style="font-size:12px;color:var(--ink-3)">${hasProductCounts ? 'Current upload' : 'Legacy week fallback'}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px">
+        ${mixRows.map(row => `
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+              <span style="font-size:13px;font-weight:600;color:var(--ink)">${row.label}</span>
+              <span style="font-family:var(--mono);font-size:13px;color:var(--ink)">${row.count}</span>
+            </div>
+            <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:6px">
+              <div style="height:100%;width:${Math.round(row.count/maxMixCount*100)}%;background:var(--green);border-radius:3px"></div>
+            </div>
+            <div style="font-size:11px;color:var(--ink-3)">${fmtC(row.count * row.price)}/mo · ${fmtC(row.price)} each</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
 
   const tabs = [
     {id:'overview', label:'Overview'},
@@ -622,7 +689,7 @@ function renderDashboard() {
       <div class="recon-banner-icon" style="background:var(--green)">✓</div>
       <div>
         <div class="recon-banner-title" style="color:var(--green)">Methodology baseline reset this week</div>
-        <div class="recon-banner-text">Founder count is now sourced from <code>07_retention_management.csv</code> filtered to Active+Founder. Last week's saved figure used the older method, so "vs last week" comparisons are hidden for this week only. Comparisons return automatically next week.</div>
+        <div class="recon-banner-text">Active member count is now sourced from Founder, Prana, and Prana Plus rows. Last week's saved figure used the older method, so "vs last week" comparisons are hidden for this week only. Comparisons return automatically next week.</div>
       </div>
     </div>` : '';
 
@@ -631,17 +698,18 @@ function renderDashboard() {
     ${baselineNote}
     ${reconBanner}
     <div class="g3" style="margin-bottom:20px">
-      ${pulse('MRR', fmtC(r.mrr), (m.active_count||0) + ' members × $' + FOUNDER_PRICE, 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
-      ${pulse('Founder Members', m.active_count||'—', (800-(m.active_count||0))+' to full capacity', 'var(--ink)', wow(m.active_count, p?.membership?.active_count, false))}
+      ${pulse('MRR', fmtC(r.mrr), (m.active_count||0) + ' members · avg $' + avgMemberPrice, 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
+      ${pulse('Active Members', m.active_count||'—', productSplitSub, 'var(--ink)', wow(m.active_count, p?.membership?.active_count, false))}
       ${pulse('Net Growth', signed(m.net_growth||0), memberMovementSub(), (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
       ${pulse('Member Health', hs.green||0, '<span style="color:var(--amber)">●'+(hs.amber||0)+' at risk</span> &nbsp;<span style="color:var(--red)">●'+(hs.red||0)+' urgent</span>', 'var(--green)')}
       ${pulse('Avg Visits / Member', (c.avg_founder_visits||0)+'/wk', 'Target: 3+ per week', (c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)')}
       ${pulse('Forecasted ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
     </div>
+    ${membershipMixCard}
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:24px;box-shadow:var(--shadow)">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:12px;font-weight:500;color:var(--ink-2)">Progress to 800 Founder Members</div>
+        <div style="font-size:12px;font-weight:500;color:var(--ink-2)">Progress to 800 Active Members</div>
         <div style="font-family:var(--mono);font-size:12px;color:var(--green)">${m.active_count||0} / 800 · ${m.progress_to_800_pct||0}%</div>
       </div>
       <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
@@ -684,11 +752,14 @@ function renderDashboard() {
 
   // ─── TAB: MEMBERS ────────────────────────────────────────────────
   const tabMembers = `
+    ${membershipMixCard}
     <div class="g4" style="margin-bottom:16px">
-      ${pulse('Active Members', m.active_count||'—', 'Founder Members on autopay', 'var(--ink)')}
-      ${pulse('New This Week', m.new_this_week||0, 'Joined as Founder Members', 'var(--green)')}
+      ${pulse('Active Members', m.active_count||'—', productSplitSub, 'var(--ink)')}
+      ${pulse('Founder', founderCount, '$200/mo', 'var(--green)')}
+      ${pulse('Prana', pranaCount, '$249/mo', 'var(--green)')}
+      ${pulse('Prana Plus', pranaPlusCount, '$379/mo', 'var(--green)')}
+      ${pulse('New This Week', m.new_this_week||0, 'Joined as active members', 'var(--green)')}
       ${pulse('Churned', m.churned_this_week||0, fmtPct(m.churn_rate_pct)+' churn rate', (m.churned_this_week||0)>0?'var(--red)':'var(--ink)')}
-      ${pulse('Net Growth', signed(m.net_growth||0), memberMovementSub(), (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
     </div>
 
     ${renderHealthSummary(c)}
@@ -710,7 +781,7 @@ function renderDashboard() {
 
   const tabRevenue = `
     <div class="g2" style="margin-bottom:16px">
-      ${pulse('MRR', fmtC(r.mrr), (m.active_count||0) + ' Founder Members × $' + FOUNDER_PRICE, 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
+      ${pulse('MRR', fmtC(r.mrr), (m.active_count||0) + ' active members · avg $' + avgMemberPrice, 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
       ${pulse('Forecasted ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
       ${pulse('Revenue / Member', fmtC(revPerMember), 'Total weekly revenue ÷ ' + (m.active_count||0) + ' members', 'var(--ink)')}
       ${pulse('Weekly Sales', fmtC(totalWeekly), 'MRR contribution + non-autopay this week', 'var(--ink)')}
@@ -727,7 +798,7 @@ function renderDashboard() {
           <div style="height:100%;background:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'};border-radius:3px;width:${Math.min(r.mrr_pct||0,100)}%"></div>
         </div>
         <div style="font-size:12px;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">
-          ${(r.mrr_pct||0)>=70?'✓ Above 70% target — recurring revenue is healthy':'Below 70% target — grow Founder Members to stabilise'}
+          ${(r.mrr_pct||0)>=70?'✓ Above 70% target — recurring revenue is healthy':'Below 70% target — grow active members to stabilise'}
         </div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
@@ -736,9 +807,9 @@ function renderDashboard() {
           <span style="font-size:13px;color:var(--ink-2)">Non-autopay this week</span>
           <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--ink)">${fmtC(r.pack_and_class||0)}</span>
         </div>
-        <div style="font-size:11px;color:var(--ink-3);margin-bottom:8px">Drop-ins, packs, late cancel & no-show fees. Excludes Founder Membership purchases.</div>
+        <div style="font-size:11px;color:var(--ink-3);margin-bottom:8px">Drop-ins, packs, late cancel & no-show fees. Excludes Founder, Prana, and Prana Plus membership purchases.</div>
         <div style="background:var(--amber-light);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--amber);margin-top:8px">
-          ↑ Pack & class buyers are Founder Member prospects — each is a warm conversion opportunity
+          ↑ Pack & class buyers are membership prospects — each is a warm conversion opportunity
         </div>
       </div>
     </div>`;
@@ -867,7 +938,7 @@ function renderDashboard() {
     ${classInsightsBlock}
     <div class="g4" style="margin-bottom:16px">
       ${pulse('Total Check-ins', totalVisits.toLocaleString(), totalSessions + ' sessions · ' + avgPerSession + ' avg/session', 'var(--ink)')}
-      ${pulse('Founder Visits', founderVisits, (c.avg_founder_visits||0)+' avg / member', (c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)')}
+      ${pulse('Member Visits', memberVisits, (c.avg_founder_visits||0)+' avg / member', (c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)')}
       ${pulse('Late Cancels', fmtPct(a.no_show_rate_pct||0), 'Of all bookings', (a.no_show_rate_pct||0)>10?'var(--amber)':'var(--ink)')}
       ${pulse('First-Time Visitors', c.first_time_visitors||0, 'Acquisition pipeline', 'var(--green)')}
     </div>
@@ -876,18 +947,18 @@ function renderDashboard() {
       <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">All Classes This Week</div>
       ${classWithAvg.slice(0,8).map((cl,i) => {
         const barW = Math.round(cl.visits/maxVisits*100);
-        const isFounderClass = !cl.name.toLowerCase().includes('reformer');
+        const isMemberClass = !cl.name.toLowerCase().includes('reformer');
         return '<div style="margin-bottom:14px">' +
           '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">' +
             '<div style="font-size:13px;font-weight:500;color:var(--ink)">' + cl.name +
               (cl.top_instructor ? '<span style="font-size:11px;color:var(--ink-3);font-weight:400"> · ' + cl.top_instructor + '</span>' : '') +
             '</div>' +
             '<div style="font-size:12px;color:var(--ink-3);white-space:nowrap;margin-left:8px">' + cl.visits + ' visits · ' + cl.avg_per_session + '/session' +
-              (cl.founder_visits > 0 && isFounderClass ? ' · <span style=\"color:var(--green)\">' + cl.founder_pct + '% Founders</span>' : '') +
+              ((cl.member_visits ?? cl.founder_visits) > 0 && isMemberClass ? ' · <span style=\"color:var(--green)\">' + (cl.member_pct ?? cl.founder_pct) + '% Members</span>' : '') +
             '</div>' +
           '</div>' +
           '<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">' +
-            '<div style="height:100%;width:' + barW + '%;background:' + (isFounderClass && cl.founder_pct > 20 ? 'var(--green)' : 'var(--ink-3)') + ';border-radius:3px"></div>' +
+            '<div style="height:100%;width:' + barW + '%;background:' + (isMemberClass && (cl.member_pct ?? cl.founder_pct) > 20 ? 'var(--green)' : 'var(--ink-3)') + ';border-radius:3px"></div>' +
           '</div>' +
           '<div style="font-size:10px;color:var(--ink-3);margin-top:3px">' + (cl.top_day||'') + (cl.top_time ? ' · ' + cl.top_time : '') + (cl.late_cancels > 0 ? ' · ' + cl.late_cancels + ' late cancels' : '') + '</div>' +
         '</div>';
@@ -1011,7 +1082,7 @@ function renderDataChat() {
         <div class="chat-context-title">Current Context</div>
         <div class="chat-stat"><span>Week</span><span>${esc(c.week_of || '—')}</span></div>
         <div class="chat-stat"><span>MRR</span><span>${fmtC(r.mrr || 0)}</span></div>
-        <div class="chat-stat"><span>Founder Members</span><span>${m.active_count || 0}</span></div>
+        <div class="chat-stat"><span>Active Members</span><span>${m.active_count || 0}</span></div>
         <div class="chat-stat"><span>Net Growth</span><span>${(m.net_growth || 0) > 0 ? '+' : ''}${m.net_growth || 0}</span></div>
         <div class="chat-stat"><span>At Risk / Urgent</span><span>${hs.amber || 0} / ${hs.red || 0}</span></div>
         <div class="chat-stat"><span>Schedule Rows</span><span>${(c.class_schedule || []).length || '—'}</span></div>
@@ -1088,7 +1159,7 @@ function renderHealthSummary(c) {
   if (!total) return '';
   return `
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 22px;margin-bottom:20px;box-shadow:var(--shadow)">
-    <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Founder Member Health — ${total} total</div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Active Member Health — ${total} total</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <div style="flex:1;min-width:100px;background:var(--green-light);border-radius:var(--radius);padding:12px 14px;text-align:center">
         <div style="font-family:var(--display);font-size:24px;color:var(--green)">${hs.green||0}</div>
@@ -1121,18 +1192,22 @@ function renderPaymentIssuesCard(failed) {
     return `
     <div style="background:var(--green-light);border:1px solid var(--green);border-radius:var(--radius-lg);padding:18px 22px;margin-bottom:20px">
       <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--green);text-transform:uppercase;margin-bottom:6px">✓ Payment Issues</div>
-      <div style="font-size:13px;color:var(--ink-2)">No failed payments this week. All Founder Member autopay charges processed successfully.</div>
+      <div style="font-size:13px;color:var(--ink-2)">No failed payments this week. All active member autopay charges processed successfully.</div>
     </div>`;
   }
 
-  const arrAtRisk = failed.length * FOUNDER_PRICE * 12;
+  const arrAtRisk = failed.reduce((s,p) => {
+    const amount = parseMoney(p.monthly_amount || p.amount);
+    const productPrice = memberProductPrice(memberProductFromText(p.membership || p.item || p.card || ''));
+    return s + (Number.isFinite(amount) && amount > 0 ? amount : productPrice);
+  }, 0) * 12;
 
   return `
   <div style="background:var(--red-light);border:1px solid var(--red);border-radius:var(--radius-lg);padding:18px 22px;margin-bottom:20px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:8px">
       <div>
         <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;color:var(--red);text-transform:uppercase;margin-bottom:4px">⚠ Payment Issues — Action Required</div>
-        <div style="font-size:13px;color:var(--ink-2)">${failed.length} Founder Member${failed.length>1?'s':''} with failed autopay this week · <strong style="color:var(--red)">${fmtC(arrAtRisk)} ARR at risk</strong></div>
+        <div style="font-size:13px;color:var(--ink-2)">${failed.length} active member${failed.length>1?'s':''} with failed autopay this week · <strong style="color:var(--red)">${fmtC(arrAtRisk)} ARR at risk</strong></div>
       </div>
       <button class="btn-secondary" onclick="handlePaymentIssuesDownload()" style="border-color:var(--red);color:var(--red)">⬇ Export</button>
     </div>
@@ -1244,7 +1319,7 @@ function renderNewMemberSection(newMembers) {
   if (!newMembers || !newMembers.length) {
     return `
     <div style="margin-bottom:16px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--ink-3);font-size:13px">
-      <strong style="color:var(--green)">🆕 New This Week</strong> — No new Founder Members this week
+      <strong style="color:var(--green)">🆕 New This Week</strong> — No new active members this week
     </div>`;
   }
   return `
@@ -1416,7 +1491,9 @@ async function processRawFiles(rawFiles) {
 function resolveUploadKey(rawKey) {
   const clean = String(rawKey || '').trim();
   const lower = clean.toLowerCase().replace(/\s+/g, '_');
-  const required = EXPECTED.find(e => e.key.toLowerCase() === lower);
+  const required = EXPECTED.find(e =>
+    e.key.toLowerCase() === lower || (e.aliases || []).some(alias => alias.toLowerCase().replace(/\s+/g,'_') === lower)
+  );
   if (required) return required.key;
   const optional = OPTIONAL.find(e =>
     e.key.toLowerCase() === lower || (e.aliases || []).some(alias => alias.toLowerCase() === lower)
@@ -1454,6 +1531,88 @@ function aggregateData() {
       if (key && row[key] != null && String(row[key]).trim() !== '') return String(row[key]).trim();
     }
     return '';
+  }
+  function normText(value) {
+    return String(value || '').trim().toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ');
+  }
+  function rowName(row) {
+    return ((firstValue(row, ['First name','First Name','First']) || '').trim() + ' ' +
+      (firstValue(row, ['Last name','Last Name','Last']) || '').trim()).trim() ||
+      fixName(firstValue(row, ['Name','Client','Client Name']));
+  }
+  function memberProduct(row) {
+    const type = normText(firstValue(row, [
+      'Membership Type','Membership','Membership tier','Membership Tier','Pricing Option',
+      'Membership Name','Membership Option','Membership Program','Contract Name',
+      'Plan','Plan Name','Product','Product Name','Subscription','Subscription Plan',
+      'Item','Item name','Item Name','Service','Service Name'
+    ]));
+    if (!type) return null;
+    const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => type.includes(alias)));
+    return product ? product.key : null;
+  }
+  function memberProductLabel(key) {
+    return MEMBER_PRODUCTS.find(p => p.key === key)?.label || '';
+  }
+  function memberProductPrice(key) {
+    return MEMBER_PRODUCTS.find(p => p.key === key)?.price || DEFAULT_MEMBER_PRICE;
+  }
+  function memberProductFromText(value) {
+    const text = normText(value);
+    if (!text) return null;
+    const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => text.includes(alias)));
+    return product ? product.key : null;
+  }
+  function isActiveMemberRow(row, assumeActive) {
+    const product = memberProduct(row);
+    if (!product) return false;
+    const status = normText(firstValue(row, ['Status','Member Status','Subscription Status']));
+    return assumeActive || !status || ['active','current','paid','enabled'].includes(status);
+  }
+  function memberMonthlyAmount(row) {
+    const monthlyAmount = toNum(firstValue(row, [
+      'Monthly Amount','Monthly Price','Membership Price','Autopay Amount','AutoPay Amount',
+      'Recurring Amount','Contract Amount'
+    ]));
+    return monthlyAmount > 0 ? monthlyAmount : memberProductPrice(memberProduct(row));
+  }
+  function rowHasMembershipField(row) {
+    return Boolean(firstValue(row, [
+      'Membership Type','Membership','Membership tier','Membership Tier','Pricing Option',
+      'Membership Name','Membership Option','Membership Program','Contract Name',
+      'Plan','Plan Name','Product','Product Name','Subscription','Subscription Plan',
+      'Item','Item name','Item Name','Service','Service Name'
+    ]));
+  }
+  function isMemberProductRow(row) {
+    return Boolean(memberProduct(row)) || !rowHasMembershipField(row);
+  }
+  function sameMemberKey(row) {
+    const id = firstValue(row, ['ID','Client ID','Client Id','Member ID','Customer ID']);
+    if (id) return 'id:' + id;
+    const email = normText(firstValue(row, ['Email','Email Address','Email Address ']));
+    if (email) return 'email:' + email;
+    const name = normText(rowName(row));
+    return name ? 'name:' + name : '';
+  }
+  function uniqueMemberRows(rows, assumeActive, existingSeen) {
+    const seen = existingSeen || new Set();
+    const uniqueRows = [];
+    (rows || []).forEach(r => {
+      if (!isActiveMemberRow(r, assumeActive)) return;
+      const key = sameMemberKey(r);
+      if (key && seen.has(key)) return;
+      if (key) seen.add(key);
+      uniqueRows.push(r);
+    });
+    return uniqueRows;
+  }
+  function mergeMemberSources(primaryRows, secondaryRows) {
+    const seen = new Set();
+    return [
+      ...uniqueMemberRows(primaryRows, false, seen),
+      ...uniqueMemberRows(secondaryRows, true, seen),
+    ];
   }
   function normaliseScheduleRows(rows) {
     const dayOrder = {monday:1,tuesday:2,wednesday:3,thursday:4,friday:5,saturday:6,sunday:7};
@@ -1533,7 +1692,7 @@ function aggregateData() {
   const class_schedule = normaliseScheduleRows(scheduleRows);
 
   // ─── FIX D: Build phone lookup from 03_members_active.csv ──
-  // Mobile phone is the source of truth for Founder Members.
+  // Mobile phone is the source of truth for active paid members.
   // Home phone in 07_retention_management is largely empty.
   // Lookup by ID first (most reliable), then by name as fallback.
   const mobileById = {};
@@ -1598,39 +1757,41 @@ function aggregateData() {
   const weekStart = new Date(wsY, wsM - 1, wsD, 0, 0, 0, 0);
   const weekEnd = new Date(wsY, wsM - 1, wsD + 6, 23, 59, 59, 999);
 
-  // Active Founder count from 07_retention_management
-  const activeFounderRows = retMgmtRows.filter(r => {
-    const status = (r['Status']||'').trim();
-    const type   = (r['Membership Type']||'').trim();
-    return status === 'Active' && type.includes('Founder');
-  });
-  const active_count = activeFounderRows.length;
+  const activeMemberRows = mergeMemberSources(retMgmtRows, activeRows);
+  const active_count = activeMemberRows.length;
+  const member_product_counts = activeMemberRows.reduce((acc, r) => {
+    const label = memberProductLabel(memberProduct(r));
+    if (label) acc[label] = (acc[label] || 0) + 1;
+    return acc;
+  }, {});
 
-  // MRR = active_count × $200
-  const mrr = active_count * FOUNDER_PRICE;
+  // MRR = sum of active Prana/Prana Plus monthly amounts; defaults to the configured tier price when the export has no amount column.
+  const mrr = activeMemberRows.reduce((s,r) => s + memberMonthlyAmount(r), 0);
 
-  // Pack & Class Sales — exclude Founder Membership purchases
+  // Pack & Class Sales — exclude membership purchases
   const non_autopay_total = salesRows.reduce((s,r) => {
     const item = (r['Item name']||'').trim();
-    if (item.toLowerCase().includes('founder')) return s;
+    if (memberProduct({ 'Item name': item })) return s;
     return s + toNum(r['Item Total'] || r['Total'] || r['Amount'] || 0);
   }, 0);
 
   // Weekly Sales = MRR + non-autopay
   const total_weekly_revenue = mrr + non_autopay_total;
 
-  // Failed Founder payments
+  // Failed active-member payments
   const failed_payments = autopayRows
     .filter(r => {
       const item = (r['Item']||'').trim();
       const status = (r['Status']||'').trim();
-      return item.includes('Founder') && status !== 'Success' && status !== '';
+      return memberProduct({ Item: item }) && status !== 'Success' && status !== '';
     })
     .map(r => ({
       name: (r['Client']||'').trim(),
       email: (r['Email']||'').trim(),
       phone: (r['Phone #']||'').trim(),
       amount: (r['Amount']||'').trim(),
+      membership: memberProductLabel(memberProduct({ Item: (r['Item']||'').trim() })),
+      monthly_amount: toNum(r['Amount']) || memberProductPrice(memberProduct({ Item: (r['Item']||'').trim() })),
       status: (r['Status']||'').trim(),
       card: (r['Billing Information']||'').trim(),
       date: (r['Date']||'').trim(),
@@ -1641,17 +1802,15 @@ function aggregateData() {
       return acc;
     }, []);
 
-  // New Founder Members this week
-  const first_visit_count = retMgmtRows.filter(r => {
-    const status = (r['Status']||'').trim();
-    const type   = (r['Membership Type']||'').toLowerCase();
-    if (status !== 'Active' || !type.includes('founder')) return false;
+  // New Prana/Prana Plus members this week
+  const first_visit_count = activeMemberRows.filter(r => {
     const ms = r['Member Since'] || '';
     try { return new Date(ms) >= weekStart; } catch { return false; }
   }).length;
 
   // Cancelled this week
   const cancelled_count = cancelRows.filter(r => {
+    if (!isMemberProductRow(r)) return false;
     const raw = (r['Cancellation Date'] || '').trim();
     const dateStr = raw.replace(/^Terminated from\s*/i, '').trim();
     if (!dateStr) return false;
@@ -1663,10 +1822,10 @@ function aggregateData() {
 
   const first_time_visitors = firstRows.length;
 
-  // Founder Member health map
-  const founderMap = {};
-  activeFounderRows.forEach(r => {
-    const name = ((r['First name']||'').trim() + ' ' + (r['Last name']||'').trim()).trim();
+  // Active member health map
+  const memberMap = {};
+  activeMemberRows.forEach(r => {
+    const name = rowName(r);
     if (!name) return;
     const c30  = parseInt(r['Check Ins 30 Day']||'0') || 0;
     const cYTD = parseInt(r['Check Ins YTD']||'0') || 0;
@@ -1679,15 +1838,15 @@ function aggregateData() {
     else if (c30 === 0 || daysAbsent >= 21) health = 'red';
     else if (c30 <= 2) health = 'amber';
     // FIX D: phone now resolved from 03_members_active.csv (Mobile) first.
-    founderMap[name.toLowerCase()] = {
+    memberMap[name.toLowerCase()] = {
       name, email: (r['Email']||'').trim(), phone: resolvePhone(r),
-      membership: (r['Membership Type']||'Founder Member').trim(),
+      membership: firstValue(r, ['Membership Type','Membership','Membership Tier','Plan','Product']) || memberProductLabel(memberProduct(r)),
       member_since: r['Member Since']||'', checkins_30: c30, checkins_ytd: cYTD,
       last_visit: lv, days_absent: daysAbsent, health, freeze,
     };
   });
 
-  const allF = Object.values(founderMap);
+  const allF = Object.values(memberMap);
   const health_summary = {
     green:  allF.filter(f => f.health==='green').length,
     amber:  allF.filter(f => f.health==='amber').length,
@@ -1729,11 +1888,11 @@ function aggregateData() {
   };
 
   const no_return_members = noReturnRows
-    .filter(r => (r['Pricing Option']||'').includes('Founder'))
+    .filter(r => memberProduct(r))
     .slice(0, 20)
     .map(r => {
       const name   = fixName(r['Client']||'');
-      const enrich = founderMap[name.toLowerCase()] || {};
+      const enrich = memberMap[name.toLowerCase()] || {};
       return {
         name, email: enrich.email||(r['Email']||'').trim(),
         phone: enrich.phone||(r['Phone']||'').trim(),
@@ -1748,38 +1907,35 @@ function aggregateData() {
     });
 
   // FIX D: phone now resolved from 03_members_active.csv (Mobile) first.
-  const new_founder_members = retMgmtRows
-    .filter(r => {
-      const status = (r['Status']||'').trim();
-      const type = (r['Membership Type']||'').toLowerCase();
-      return status === 'Active' && type.includes('founder');
-    })
+  const new_founder_members = activeMemberRows
     .filter(r => { try { return new Date(r['Member Since']) >= weekStart; } catch { return false; } })
     .map(r => ({
-      name: ((r['First name']||'').trim()+' '+(r['Last name']||'').trim()).trim(),
+      name: rowName(r),
       email: (r['Email']||'').trim(), phone: resolvePhone(r),
-      membership: (r['Membership Type']||'Founder Member').trim(),
+      membership: firstValue(r, ['Membership Type','Membership','Membership Tier','Plan','Product']) || memberProductLabel(memberProduct(r)),
       member_since: r['Member Since']||'',
       visits_so_far: parseInt(r['Check Ins YTD']||'0')||0,
     }));
 
   const cancelled_members = cancelRows
+    .filter(r => isMemberProductRow(r))
     .map(r => {
       const name   = (r['Name']||'').trim();
-      const enrich = founderMap[name.toLowerCase()] || {};
+      const enrich = memberMap[name.toLowerCase()] || {};
       const cYTD   = enrich.checkins_ytd||0;
       const cancelDateRaw = (r['Cancellation Date']||'').replace(/^Terminated from\s*/i,'').trim();
       return {
         name, email: (r['Email Address ']||r['Email']||'').trim(),
         phone: (r['Phone Number']||r['Phone']||'').trim(),
+        membership: firstValue(r, ['Membership Type','Membership','Membership Tier','Pricing Option','Plan','Product']) || enrich.membership || memberProductLabel(memberProduct(r)),
         cancel_date: cancelDateRaw,
         lifetime_visits: cYTD, member_since: enrich.member_since||'',
         churn_signal: cYTD<=3?'never_formed_habit':cYTD<=10?'early_churn':'long_term_churn',
       };
     });
 
-  const founderIds = new Set(
-    activeFounderRows.map(r => (r['ID']||'').trim()).filter(Boolean)
+  const memberIds = new Set(
+    activeMemberRows.map(r => (r['ID']||'').trim()).filter(Boolean)
   );
 
   const classMap   = {};
@@ -1789,13 +1945,13 @@ function aggregateData() {
   const sessionsSeen = new Set();
   const days       = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   let late_cancel_count    = 0;
-  let founder_visits_total = 0;
+  let member_visits_total = 0;
 
   attendRows.forEach(r => {
     const className  = (r['Description']||'Unknown').trim();
     const status     = (r['Status']||'').toLowerCase();
     const clientId   = (r['Client ID']||'').trim();
-    const isFounder  = founderIds.has(clientId);
+    const isMember  = memberIds.has(clientId);
     const rawStaff   = (r['Staff']||'').trim();
     const startTime  = (r['Start time']||'').trim();
     const dateStr    = (r['Date']||'').trim();
@@ -1816,14 +1972,18 @@ function aggregateData() {
     sessionsSeen.add(sessionKey);
 
     if (!classMap[className]) classMap[className] = {
-      name: className, visits:0, founder_visits:0, late_cancels:0,
+      name: className, visits:0, founder_visits:0, member_visits:0, late_cancels:0,
       instructors:{}, times:{}, days:{}, sessions:new Set()
     };
     classMap[className].sessions.add(sessionKey);
 
     if (status.includes('signed')) {
       classMap[className].visits += 1;
-      if (isFounder) { classMap[className].founder_visits += 1; founder_visits_total += 1; }
+      if (isMember) {
+        classMap[className].founder_visits += 1;
+        classMap[className].member_visits += 1;
+        member_visits_total += 1;
+      }
       if (instructor) classMap[className].instructors[instructor] = (classMap[className].instructors[instructor]||0)+1;
       if (startTime)  classMap[className].times[startTime]        = (classMap[className].times[startTime]||0)+1;
       if (dayName)    classMap[className].days[dayName]            = (classMap[className].days[dayName]||0)+1;
@@ -1847,9 +2007,11 @@ function aggregateData() {
       name:           c.name,
       visits:         c.visits,
       founder_visits: c.founder_visits,
+      member_visits:  c.member_visits,
       late_cancels:   c.late_cancels,
       sessions_count: c.sessions.size,
       founder_pct:    c.visits > 0 ? Math.round(c.founder_visits/c.visits*100) : 0,
+      member_pct:     c.visits > 0 ? Math.round(c.member_visits/c.visits*100) : 0,
       top_instructor: Object.entries(c.instructors).sort((a,b)=>b[1]-a[1])[0]?.[0] || '',
       top_time:       Object.entries(c.times).sort((a,b)=>b[1]-a[1])[0]?.[0] || '',
       top_day:        Object.entries(c.days).sort((a,b)=>b[1]-a[1])[0]?.[0] || '',
@@ -1875,12 +2037,12 @@ function aggregateData() {
   const peak_days  = Object.entries(dayMap).sort((a,b)=>b[1]-a[1])
     .map(([day,visits]) => ({day, visits}));
 
-  const avg_founder_visits = founderIds.size > 0
-    ? Math.round(founder_visits_total/founderIds.size*10)/10 : 0;
+  const avg_founder_visits = active_count > 0
+    ? Math.round(member_visits_total/active_count*10)/10 : 0;
 
   const founder_classes = [...class_data]
-    .filter(c => c.founder_visits > 0)
-    .sort((a,b) => b.founder_pct - a.founder_pct);
+    .filter(c => (c.member_visits ?? c.founder_visits) > 0)
+    .sort((a,b) => (b.member_pct ?? b.founder_pct) - (a.member_pct ?? a.founder_pct));
 
   const no_show_count = noRevRows.filter(r =>
     (r['Status']||'').toLowerCase().includes('no show') ||
@@ -1908,6 +2070,7 @@ function aggregateData() {
     class_data,
     class_schedule,
     health_summary,
+    member_product_counts,
     avg_founder_visits,
     founder_classes,
     instructor_data,
@@ -1939,6 +2102,7 @@ async function processFiles() {
         churned:       w.membership?.churned_this_week || 0,
         net_growth:    w.membership?.net_growth || 0,
         mrr:           w.revenue?.mrr || 0,
+        member_product_counts: w.member_product_counts || {},
         avg_visits:    w.avg_founder_visits || 0,
         health:        w.health_summary || {},
         scheduled_classes: w.class_schedule?.length || 0,
@@ -1958,6 +2122,7 @@ async function processFiles() {
 
     // Browser is source of truth — override Claude's computed values
     current.health_summary      = browserData.health_summary;
+    current.member_product_counts = browserData.member_product_counts;
     current.avg_founder_visits  = browserData.avg_founder_visits;
     current.founder_classes     = browserData.founder_classes;
     current.instructor_data     = browserData.instructor_data;
@@ -1980,7 +2145,12 @@ async function processFiles() {
       ? Math.round(browserData.mrr / browserData.total_weekly_revenue * 100) : 0;
     current.revenue.revenue_per_member = browserData.active_count > 0
       ? Math.round(browserData.total_weekly_revenue / browserData.active_count) : 0;
-    current.revenue.arr_at_risk = (browserData.failed_payments?.length || 0) * FOUNDER_PRICE * 12;
+    current.revenue.arr_at_risk = (browserData.failed_payments || [])
+      .reduce((s,p) => {
+        const amount = parseMoney(p.monthly_amount || p.amount);
+        const productPrice = memberProductPrice(memberProductFromText(p.membership || p.item || p.card || ''));
+        return s + (amount > 0 ? amount : productPrice);
+      }, 0) * 12;
 
     current.membership = current.membership || {};
     current.membership.active_count = browserData.active_count;
@@ -1994,7 +2164,7 @@ async function processFiles() {
     current.membership.progress_to_800_pct = Math.round(browserData.active_count / 800 * 100);
     current.membership.failed_payment_count = browserData.failed_payments?.length || 0;
 
-    // Net Growth is the actual active Founder headcount movement.
+    // Net Growth is the actual active member headcount movement.
     // New-minus-churn remains an operating flow detail; any remainder is status movement
     // such as Suspended/Declined members returning to Active.
     current.warnings = Array.isArray(current.warnings)
@@ -2071,8 +2241,11 @@ function renderTrends() {
     : 'flat';
 
   const netMRRByWeek = sorted.map(w => {
-    const gained = (w.membership?.new_this_week || 0) * FOUNDER_PRICE;
-    const lost   = (w.membership?.churned_this_week || 0) * FOUNDER_PRICE;
+    const avgPrice = w.membership?.active_count > 0
+      ? Math.round((w.revenue?.mrr || 0) / w.membership.active_count)
+      : DEFAULT_MEMBER_PRICE;
+    const gained = (w.membership?.new_this_week || 0) * avgPrice;
+    const lost   = (w.membership?.churned_this_week || 0) * avgPrice;
     return { week_of: w.week_of, gained, lost, net: gained - lost };
   });
 
@@ -2101,7 +2274,7 @@ function renderTrends() {
 
   const projectionBlock = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px;box-shadow:var(--shadow)">
-      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Projection to 800 Founder Members</div>
+      <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:14px">Projection to 800 Active Members</div>
       <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px;flex-wrap:wrap">
         <div style="font-family:var(--display);font-size:32px;color:${weeksTo800 ? 'var(--green)' : 'var(--red)'}">${weeksTo800 ? monthsTo800 + ' months' : 'Not on track'}</div>
         <div style="font-size:13px;color:var(--ink-3)">${weeksTo800 ? '~' + weeksTo800 + ' weeks at current pace' : 'Net growth is negative — address churn first'}</div>

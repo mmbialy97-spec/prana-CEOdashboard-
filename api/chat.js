@@ -93,6 +93,7 @@ function compactWeek(week) {
     },
     health_summary: week.health_summary,
     avg_founder_visits: week.avg_founder_visits,
+    avg_member_visits: week.avg_founder_visits,
     attendance: {
       total_visits: attendance.total_visits,
       no_show_rate_pct: attendance.no_show_rate_pct,
@@ -101,7 +102,9 @@ function compactWeek(week) {
     avg_per_session: week.avg_per_session,
     failed_payments: takeList(week.failed_payments, 12),
     new_founder_members: takeList(week.new_founder_members, 12),
+    member_product_counts: week.member_product_counts || {},
     class_data: takeList(week.class_data, 12),
+    member_classes: takeList(week.founder_classes, 12),
     class_schedule: takeList(week.class_schedule, 60),
     instructor_data: takeList(week.instructor_data, 8),
     peak_times: takeList(week.peak_times, 6),
@@ -138,10 +141,11 @@ Answer style:
 - If the data is insufficient, say "Not in uploaded data" and name the exact missing field.
 
 Business rules:
-- Founder Members are the core business. Prioritize Founder Member retention, MRR, churn, visit frequency, payment recovery, and class capacity.
-- MRR is active Founder Members multiplied by $200/month. Do not invent another formula.
+- Active Founder, Prana, and Prana Plus members are the core business. Prioritize active member retention, MRR, churn, visit frequency, payment recovery, and class capacity.
+- MRR is already calculated by the dashboard from active members and their monthly amounts. Do not invent another formula.
 - Weekly Sales means MRR plus non-autopay revenue.
-- Reformer Pilates is not included in Founder Membership and should be treated as a separate paid service.
+- Reformer Pilates is separate paid service unless the uploaded membership data says otherwise.
+- Legacy JSON keys containing "founder" may represent all active paid members. Use member_product_counts to distinguish Founder, Prana, and Prana Plus.
 - class_schedule is optional uploaded current schedule data. When present, use it for concrete class schedule recommendations and compare it against class_data attendance patterns.
 - Format answers in clean markdown for scanning.
 - Use bold labels for scannability, for example **Revenue:** or **Next move:**.

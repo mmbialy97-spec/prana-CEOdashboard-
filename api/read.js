@@ -60,6 +60,7 @@ function normalise(c) {
   const raw = c.raw || {};
   if (c.week_of) c.week_of = cleanDate(c.week_of);
   if (!c.health_summary     && raw.health_summary)     c.health_summary     = raw.health_summary;
+  if (!c.member_product_counts && raw.member_product_counts) c.member_product_counts = raw.member_product_counts;
   if (!c.avg_founder_visits && raw.avg_founder_visits) c.avg_founder_visits = raw.avg_founder_visits;
   if (!c.class_data         && raw.class_data)         c.class_data         = raw.class_data;
   if (!c.founder_classes    && raw.founder_classes)    c.founder_classes    = raw.founder_classes;

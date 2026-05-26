@@ -1,16 +1,12 @@
 // ════════════════════════════════════════════════════════════════
 //  pages/api/process.js — Prana CEO Dashboard
-//  CHANGELOG (2026-04-27)
+//  CHANGELOG
 //  ────────────────────────────────────────────────────────────────
-//  1. MRR formula corrected: count × $200 (was $199)
-//  2. Active Founder source standardised to 07_retention_management
-//     (Status='Active' AND Membership Type contains 'Founder')
-//  3. Pack & Class Sales now excludes Founder rows from 01_sales
-//  4. Weekly Sales = MRR contribution + non-autopay (total revenue)
-//  5. MRR Stability target copy fixed
-//  6. Revenue/Member redefined as total weekly rev ÷ active members
-//  7. Class avg copy ("of 98") fixed: now per-session, not total
-//  8. Failed payments passed through for Payment Issues card
+//  2026-05-26
+//  1. Active member source supports Founder, Prana, and Prana Plus.
+//  2. MRR is browser-calculated from tier pricing, not a single $200 rate.
+//  3. Pack & Class Sales excludes all membership rows from 01_sales.
+//  4. Legacy founder_* keys are treated as active-member compatibility keys.
 // ════════════════════════════════════════════════════════════════
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyXKb1IAu8YGfmP86Z8eL4B3YEvKE5cLh6k1MgGOAM2BQ_FRd9zIHbFco631fIFxq07/exec';
@@ -45,9 +41,9 @@ export default async function handler(req, res) {
 
     const slimData = {
       week_of:             data.week_of,
-      sales_total:         data.sales_total,           // Now = non-Founder sales only
+      sales_total:         data.sales_total,           // Now = non-membership sales only
       non_autopay_total:   data.non_autopay_total,     // Same as sales_total, kept for clarity
-      mrr:                 data.mrr,                   // count × $200
+      mrr:                 data.mrr,                   // Browser-calculated tier MRR
       total_weekly_revenue:data.total_weekly_revenue,  // mrr + non_autopay
       active_count:        data.active_count,
       new_this_week:       data.first_visit_count,
@@ -56,6 +52,7 @@ export default async function handler(req, res) {
       first_time_visitors: data.first_time_visitors,
       no_show_count:       data.no_show_count,
       avg_founder_visits:  data.avg_founder_visits,
+      avg_member_visits:   data.avg_founder_visits,
       health_summary:      data.health_summary,
       total_sessions:      data.total_sessions,
       avg_per_session:     data.avg_per_session,
@@ -63,9 +60,11 @@ export default async function handler(req, res) {
       no_return_members:   (data.no_return_members   || []).slice(0, 10),
       cancelled_members:   (data.cancelled_members   || []).slice(0, 5),
       new_founder_members: (data.new_founder_members || []).slice(0, 5),
+      member_product_counts: data.member_product_counts || {},
       class_data:          (data.class_data          || []).slice(0, 10),
       class_schedule:      (data.class_schedule      || []).slice(0, 60),
       founder_classes:     (data.founder_classes     || []).slice(0, 5),
+      member_classes:      (data.founder_classes     || []).slice(0, 5),
       instructor_data:     (data.instructor_data     || []).slice(0, 5),
       peak_times:          (data.peak_times          || []).slice(0, 5),
       peak_days:           (data.peak_days           || []).slice(0, 7),
@@ -141,30 +140,32 @@ function buildPrompt(data, history) {
   return `You are the business intelligence engine for Prana Wellness Club, a boutique fitness studio in Austin, Texas.
 
 ABOUT PRANA:
-- Target: 800 Founder Members at full capacity
+- Target: 800 active paid members at full capacity
 - Services: Pilates Reformer, Heated Sculpt, Heated Mat Pilates, Prana Vinyasa Flow, Yin, Private
-- Revenue model: MRR = active_count × $200/month always. This is the only MRR formula.
-- Key staff: Dorian owns Founder Member retention and outreach
-- MRR target: >70% of total revenue should be Founder Member autopay
-- CRITICAL: Only reference Founder Members in all analysis. Never mention ClassPass, Friends and Family, or drop-ins except as an acquisition opportunity in bright_spot only.
-- Reformer Pilates is NOT included in any Founder Membership — it is a separate paid service.
-- Founder Membership (Unlimited) covers: Yoga, Sculpt, Mat Pilates, Vinyasa, Yin
+- Revenue model: MRR is already calculated by the browser from active Founder, Prana, and Prana Plus members and their monthly amounts.
+- Key staff: Dorian owns active member retention and outreach
+- MRR target: >70% of total revenue should be active member autopay
+- CRITICAL: Reference active Founder, Prana, and Prana Plus members in membership analysis. Never mention ClassPass, Friends and Family, or drop-ins except as an acquisition opportunity in bright_spot only.
+- Reformer Pilates is not included in standard membership unless the uploaded membership product says otherwise; treat it as a separate paid service when uncertain.
 
 IMPORTANT DATA NOTES:
-- mrr = active_count × $200 (this is the canonical MRR — always use this)
-- non_autopay_total = sum of 01_sales Item Total EXCLUDING any row with "Founder" in Item name (drop-ins, packs, late fees, no-show fees)
+- mrr = browser-calculated active member MRR (this is the canonical MRR — always use this)
+- non_autopay_total = sum of 01_sales Item Total EXCLUDING Founder/Prana/Prana Plus membership purchases (drop-ins, packs, late fees, no-show fees)
 - sales_total alias = non_autopay_total (same value)
 - total_weekly_revenue = mrr + non_autopay_total (the CEO-level "Weekly Sales" figure)
-- active_count = Founder Members from 07_retention_management filtered to Status=Active AND Membership Type contains 'Founder'
-- new_this_week = Founder Members who joined THIS WEEK ONLY (not cumulative)
-- cancelled_count = Founder Members who cancelled THIS WEEK ONLY (not cumulative)
+- active_count = active Founder + Prana + Prana Plus members
+- member_product_counts = count split for Founder vs Prana vs Prana Plus when available
+- new_this_week = active members who joined THIS WEEK ONLY (not cumulative)
+- cancelled_count = active members who cancelled THIS WEEK ONLY (not cumulative)
 - flow_net_growth = new_this_week minus cancelled_count; this is acquisition/churn flow only
-- avg_founder_visits = average visits per Founder Member this week. Target is 3+/week.
+- avg_founder_visits = average visits per active member this week. Target is 3+/week.
+- avg_member_visits is the same metric as avg_founder_visits; avg_founder_visits is a legacy JSON key and is not Founder-only.
 - health_summary = {green: 3+visits/month, amber: 1-2 visits/month, red: 0 visits or 21+ days absent}
-- failed_payments = Founder Members whose autopay charge was Suspended or Declined this week — these are revenue at risk
+- failed_payments = active members whose autopay charge was Suspended or Declined this week — these are revenue at risk
 - total_sessions = total class sessions held this week (denominator for "average attendance per session")
 - avg_per_session = total_visits ÷ total_sessions (typical class size — use this NOT total visits when discussing class performance)
 - class_schedule = optional current schedule CSV, normalized as class name, day/date, time, instructor, room, capacity, booked, waitlist. Use it to compare current attendance patterns against what is actually on the schedule.
+- founder_classes is a legacy JSON key for active member-heavy classes. Treat it as all active paid members, not Founder-only.
 
 CALCULATION RULES:
 - mrr is already calculated; do NOT recompute
@@ -177,7 +178,7 @@ CALCULATION RULES:
 - churn_rate_pct = round(cancelled_count / active_count * 100, 1)
 - progress_to_800_pct = round(active_count / 800 * 100)
 - failed_payment_count = length of failed_payments array
-- arr_at_risk = failed_payment_count × $200 × 12 (annualised value at risk if these cards aren't fixed)
+- arr_at_risk = browser-calculated annualised value at risk if these cards aren't fixed
 - Today is ${today}
 - critical = members with 0 visits in past 14-29 days, MAX 10
 - watch = members with 1-2 visits/month (amber health), MAX 10
@@ -203,7 +204,7 @@ ${JSON.stringify(data)}
 ${hasHistory ? `HISTORICAL TREND DATA (${history.length} previous weeks, oldest first):
 ${JSON.stringify(history)}` : 'No historical trend data available yet.'}
 
-INTELLIGENCE — CEO LEVEL. Qualitative AND quantitative. Only reference Founder Members.
+INTELLIGENCE — CEO LEVEL. Qualitative AND quantitative. Reference active Founder, Prana, and Prana Plus members.
 
 headline: One punchy sentence with the most important business reality. If previous week exists, reference trajectory. If MRR is above 70% of total revenue, lead with that being a HEALTHY signal — do not frame as "missing the target" when the target is hit.
 
