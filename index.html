@@ -1535,9 +1535,25 @@ function aggregateData() {
   function normText(value) {
     return String(value || '').trim().toLowerCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ');
   }
+  function looksLikeClientId(value) {
+    return /^\d+(?:\.\d+e\+\d+)?$/i.test(String(value || '').trim());
+  }
+  function hasSwappedActiveNameColumns(row) {
+    return looksLikeClientId(row['First name']) && !looksLikeClientId(row['ID']) && Boolean(row['Last name']);
+  }
+  function memberIdValue(row) {
+    if (hasSwappedActiveNameColumns(row)) return String(row['First name'] || '').trim();
+    return firstValue(row, ['ID','Client ID','Client Id','Member ID','Customer ID']);
+  }
+  function memberFirstName(row) {
+    return hasSwappedActiveNameColumns(row) ? row['Last name'] : firstValue(row, ['First name','First Name','First']);
+  }
+  function memberLastName(row) {
+    return hasSwappedActiveNameColumns(row) ? row['ID'] : firstValue(row, ['Last name','Last Name','Last']);
+  }
   function rowName(row) {
-    return ((firstValue(row, ['First name','First Name','First']) || '').trim() + ' ' +
-      (firstValue(row, ['Last name','Last Name','Last']) || '').trim()).trim() ||
+    return ((memberFirstName(row) || '').trim() + ' ' +
+      (memberLastName(row) || '').trim()).trim() ||
       fixName(firstValue(row, ['Name','Client','Client Name']));
   }
   function memberProduct(row) {
@@ -1587,32 +1603,49 @@ function aggregateData() {
   function isMemberProductRow(row) {
     return Boolean(memberProduct(row)) || !rowHasMembershipField(row);
   }
-  function sameMemberKey(row) {
-    const id = firstValue(row, ['ID','Client ID','Client Id','Member ID','Customer ID']);
-    if (id) return 'id:' + id;
+  function memberKeys(row) {
+    const keys = [];
     const email = normText(firstValue(row, ['Email','Email Address','Email Address ']));
-    if (email) return 'email:' + email;
+    if (email) keys.push('email:' + email);
+    const id = memberIdValue(row);
+    if (id) keys.push('id:' + id);
     const name = normText(rowName(row));
-    return name ? 'name:' + name : '';
+    if (name) keys.push('name:' + name);
+    const phone = normText(firstValue(row, ['Mobile phone','Mobile Phone','Phone','Home phone','Home Phone']));
+    if (phone) keys.push('phone:' + phone);
+    return keys;
   }
-  function uniqueMemberRows(rows, assumeActive, existingSeen) {
-    const seen = existingSeen || new Set();
-    const uniqueRows = [];
-    (rows || []).forEach(r => {
-      if (!isActiveMemberRow(r, assumeActive)) return;
-      const key = sameMemberKey(r);
-      if (key && seen.has(key)) return;
-      if (key) seen.add(key);
-      uniqueRows.push(r);
-    });
-    return uniqueRows;
-  }
-  function mergeMemberSources(primaryRows, secondaryRows) {
+  function mergeMemberSources(primaryRows, secondaryRows, primaryAssumeActive = false, secondaryAssumeActive = true) {
     const seen = new Set();
-    return [
-      ...uniqueMemberRows(primaryRows, false, seen),
-      ...uniqueMemberRows(secondaryRows, true, seen),
-    ];
+    const rows = [];
+    const rowByKey = {};
+    const mergeMissingFields = (target, source) => {
+      Object.keys(source || {}).forEach(key => {
+        if (target[key] == null || String(target[key]).trim() === '') target[key] = source[key];
+      });
+    };
+    const addRow = (row, assumeActive) => {
+      if (!isActiveMemberRow(row, assumeActive)) return;
+      const keys = memberKeys(row);
+      const existingKey = keys.find(key => rowByKey[key]);
+      if (existingKey) {
+        mergeMissingFields(rowByKey[existingKey], row);
+        keys.forEach(key => {
+          seen.add(key);
+          rowByKey[key] = rowByKey[existingKey];
+        });
+        return;
+      }
+      const copy = {...row};
+      rows.push(copy);
+      keys.forEach(key => {
+        seen.add(key);
+        rowByKey[key] = copy;
+      });
+    };
+    (primaryRows || []).forEach(row => addRow(row, primaryAssumeActive));
+    (secondaryRows || []).forEach(row => addRow(row, secondaryAssumeActive));
+    return rows;
   }
   function normaliseScheduleRows(rows) {
     const dayOrder = {monday:1,tuesday:2,wednesday:3,thursday:4,friday:5,saturday:6,sunday:7};
@@ -1700,19 +1733,19 @@ function aggregateData() {
   activeRows.forEach(r => {
     const mobile = String(r['Mobile phone']||'').trim();
     if (!mobile || mobile === '-') return;
-    const id = String(r['ID']||'').trim();
-    const fn = String(r['First name']||'').trim().toLowerCase();
-    const ln = String(r['Last name']||'').trim().toLowerCase();
+    const id = String(memberIdValue(r)||'').trim();
+    const fn = String(memberFirstName(r)||'').trim().toLowerCase();
+    const ln = String(memberLastName(r)||'').trim().toLowerCase();
     if (id) mobileById[id] = mobile;
     if (fn || ln) mobileByName[fn + '|' + ln] = mobile;
   });
   // Phone resolver: prefer mobile from 03 (by ID, then by name),
   // fall back to home phone from 07, otherwise empty.
   function resolvePhone(row) {
-    const id = String(row['ID']||'').trim();
+    const id = String(memberIdValue(row)||'').trim();
     if (id && mobileById[id]) return mobileById[id];
-    const fn = String(row['First name']||'').trim().toLowerCase();
-    const ln = String(row['Last name']||'').trim().toLowerCase();
+    const fn = String(memberFirstName(row)||'').trim().toLowerCase();
+    const ln = String(memberLastName(row)||'').trim().toLowerCase();
     const byName = mobileByName[fn + '|' + ln];
     if (byName) return byName;
     const home = String(row['Home phone']||'').trim();
@@ -1757,7 +1790,7 @@ function aggregateData() {
   const weekStart = new Date(wsY, wsM - 1, wsD, 0, 0, 0, 0);
   const weekEnd = new Date(wsY, wsM - 1, wsD + 6, 23, 59, 59, 999);
 
-  const activeMemberRows = mergeMemberSources(retMgmtRows, activeRows);
+  const activeMemberRows = mergeMemberSources(activeRows, retMgmtRows, true, false);
   const active_count = activeMemberRows.length;
   const member_product_counts = activeMemberRows.reduce((acc, r) => {
     const label = memberProductLabel(memberProduct(r));
