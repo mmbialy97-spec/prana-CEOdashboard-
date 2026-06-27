@@ -934,6 +934,13 @@ function renderDashboard() {
     </div>` : '';
 
   const tabClasses = `
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:4px">Class Performance Shareout</div>
+        <div style="font-size:12px;color:var(--ink-3)">One-page coordinator summary for this selected week</div>
+      </div>
+      <button class="btn-primary" onclick="handleClassPerformanceExport()" style="margin-top:0">Export 1-pager</button>
+    </div>
     ${scheduleBlock}
     ${classInsightsBlock}
     <div class="g4" style="margin-bottom:16px">
@@ -1419,6 +1426,174 @@ function handlePaymentIssuesDownload() {
     suggested_action: 'Contact to update card. If suspended, send reactivation link.',
   }));
   downloadCSV(rows, 'payment-issues-' + (current.week_of || '') + '.csv');
+}
+
+function buildClassPerformanceExportData(current) {
+  const attendance = current.attendance || {};
+  const classes = (current.class_data || []).map(cl => ({
+    ...cl,
+    sessions_count: cl.sessions_count || 1,
+    avg_per_session: (cl.sessions_count || 1) > 0 ? Math.round((cl.visits || 0) / (cl.sessions_count || 1) * 10) / 10 : (cl.visits || 0),
+  })).sort((a,b) => (b.visits || 0) - (a.visits || 0));
+  const instructors = current.instructor_data || [];
+  const peakTimes = current.peak_times || [];
+  const peakDays = current.peak_days || [];
+  const totalSessions = current.total_sessions || classes.reduce((sum, cl) => sum + (cl.sessions_count || 0), 0);
+  const totalVisits = attendance.total_visits || classes.reduce((sum, cl) => sum + (cl.visits || 0), 0);
+  const avgPerSession = totalSessions > 0 ? Math.round(totalVisits / totalSessions * 10) / 10 : 0;
+  const memberVisits = (current.founder_classes || []).reduce((sum, cl) => sum + (cl.member_visits ?? cl.founder_visits ?? 0), 0);
+  const highCancelClasses = classes.filter(cl => (cl.late_cancels || 0) >= 10).sort((a,b) => (b.late_cancels || 0) - (a.late_cancels || 0));
+  const underperforming = classes.filter(cl => cl.avg_per_session < avgPerSession * 0.7 && (cl.visits || 0) > 0);
+  const topInstructor = instructors[0] || null;
+  const bottomInstructor = instructors.length > 1 ? instructors[instructors.length - 1] : null;
+
+  const decisions = [];
+  if (underperforming.length) {
+    decisions.push('Review ' + underperforming.slice(0, 3).map(cl => cl.name + ' (' + cl.avg_per_session + '/session)').join(', ') + ' against the studio average of ' + avgPerSession + '.');
+  }
+  if (highCancelClasses.length) {
+    decisions.push('Tighten late-cancel follow-up for ' + highCancelClasses.slice(0, 3).map(cl => cl.name + ' (' + cl.late_cancels + ')').join(', ') + '.');
+  }
+  if (topInstructor && bottomInstructor && topInstructor.name !== bottomInstructor.name) {
+    decisions.push(topInstructor.name + ' leads instructor demand at ' + topInstructor.avg_per_class + ' avg/class; review support or scheduling for ' + bottomInstructor.name + ' at ' + bottomInstructor.avg_per_class + '.');
+  }
+  if (peakTimes[0]) {
+    decisions.push('Protect or add capacity around ' + peakTimes.slice(0, 2).map(t => t.time + ' (' + t.visits + ')').join(' and ') + '.');
+  }
+  if (peakDays.length) {
+    const weakestDay = peakDays[peakDays.length - 1];
+    decisions.push('Coordinator opportunity: lift ' + weakestDay.day + ', currently the lightest day at ' + weakestDay.visits + ' check-ins.');
+  }
+
+  return {
+    week: current.week_of || '',
+    totalSessions,
+    totalVisits,
+    avgPerSession,
+    memberVisits,
+    lateCancelRate: attendance.no_show_rate_pct || 0,
+    firstTimeVisitors: current.first_time_visitors || 0,
+    classes,
+    instructors,
+    peakTimes,
+    peakDays,
+    decisions: decisions.slice(0, 5),
+  };
+}
+
+function metricTile(label, value, sub) {
+  return '<div class="metric-tile"><div class="metric-label">' + esc(label) + '</div><div class="metric-value">' + esc(value) + '</div><div class="metric-sub">' + esc(sub || '') + '</div></div>';
+}
+
+function handleClassPerformanceExport() {
+  const current = state.dashData?.current || {};
+  const data = buildClassPerformanceExportData(current);
+  if (!data.classes.length && !data.totalVisits) return alert('No class performance data to export.');
+
+  const topClasses = data.classes.slice(0, 8);
+  const maxVisits = topClasses[0]?.visits || 1;
+  const generated = new Date().toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'});
+
+  const printStyle = document.createElement('style');
+  printStyle.id = 'classPerformancePrintStyle';
+  printStyle.textContent = `
+    @page{size:A4;margin:12mm}
+    .class-export-print-root{display:none}
+    .class-export-print-root *{box-sizing:border-box}
+    @media print{
+      body{background:#fff!important}
+      body > *:not(.class-export-print-root){display:none!important}
+      .class-export-print-root{display:block!important;color:#1f2a24;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+      .class-export-print-root .page{width:210mm;min-height:297mm;margin:0 auto;background:#fbfaf7;padding:16mm 15mm 14mm}
+      .class-export-print-root .top{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;border-bottom:1px solid #d9d2c5;padding-bottom:14px;margin-bottom:14px}
+      .class-export-print-root .brand{font-family:Georgia,serif;font-size:28px;line-height:1;color:#2e5b45;margin-bottom:6px}
+      .class-export-print-root .eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#7c766b;font-weight:700}
+      .class-export-print-root .meta{text-align:right;font-size:11px;color:#7c766b;line-height:1.5}
+      .class-export-print-root .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+      .class-export-print-root .metric-tile{border:1px solid #d9d2c5;background:#fff;border-radius:8px;padding:10px}
+      .class-export-print-root .metric-label{font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:#7c766b;font-weight:700;margin-bottom:6px}
+      .class-export-print-root .metric-value{font-family:Georgia,serif;font-size:24px;color:#1f2a24;line-height:1.05}
+      .class-export-print-root .metric-sub{font-size:10px;color:#7c766b;margin-top:4px;min-height:12px}
+      .class-export-print-root .section{border:1px solid #d9d2c5;background:#fff;border-radius:8px;padding:12px;margin-bottom:10px}
+      .class-export-print-root .section-title{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#2e5b45;font-weight:800;margin-bottom:8px}
+      .class-export-print-root .decisions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+      .class-export-print-root .decision{background:#edf5ee;border-left:3px solid #2e5b45;border-radius:6px;padding:8px 9px;font-size:11px;line-height:1.35}
+      .class-export-print-root .grid{display:grid;grid-template-columns:1.45fr .95fr;gap:10px}
+      .class-export-print-root .row{display:grid;grid-template-columns:1.2fr 70px 82px;gap:8px;align-items:center;padding:6px 0;border-top:1px solid #ece7dd;font-size:11px}
+      .class-export-print-root .row:first-child{border-top:0}
+      .class-export-print-root .bar{height:6px;background:#e4ded3;border-radius:5px;overflow:hidden;margin-top:4px}
+      .class-export-print-root .fill{height:100%;background:#2e5b45;border-radius:5px}
+      .class-export-print-root .muted{color:#7c766b}
+      .class-export-print-root .mono{font-variant-numeric:tabular-nums}
+      .class-export-print-root .side-row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid #ece7dd;font-size:11px}
+      .class-export-print-root .side-row:first-of-type{border-top:0}
+      .class-export-print-root .footer{display:flex;justify-content:space-between;color:#7c766b;font-size:9.5px;margin-top:10px}
+    }`;
+
+  const printRoot = document.createElement('div');
+  printRoot.className = 'class-export-print-root';
+  printRoot.innerHTML = `<div class="page">
+  <div class="top">
+    <div>
+      <div class="eyebrow">Coordinator Shareout</div>
+      <div class="brand">Class Performance</div>
+      <div style="font-size:12px;color:#7c766b">Prana Wellness Club · Week of ${esc(data.week)}</div>
+    </div>
+    <div class="meta">Generated ${esc(generated)}<br>CEO Dashboard export</div>
+  </div>
+  <div class="metrics">
+    ${metricTile('Total Check-ins', data.totalVisits.toLocaleString(), data.totalSessions + ' sessions')}
+    ${metricTile('Avg / Session', data.avgPerSession, 'studio benchmark')}
+    ${metricTile('Member Visits', data.memberVisits, 'tracked member check-ins')}
+    ${metricTile('First-Time Visitors', data.firstTimeVisitors, fmtPct(data.lateCancelRate) + ' late cancel rate')}
+  </div>
+  <div class="section">
+    <div class="section-title">Coordinator Actions This Week</div>
+    <div class="decisions">
+      ${(data.decisions.length ? data.decisions : ['No class performance actions flagged from this upload.']).map(item => '<div class="decision">' + esc(item) + '</div>').join('')}
+    </div>
+  </div>
+  <div class="grid">
+    <div class="section">
+      <div class="section-title">Top Classes</div>
+      ${topClasses.map(cl => `
+        <div class="row">
+          <div><strong>${esc(cl.name || 'Class')}</strong><div class="bar"><div class="fill" style="width:${Math.round((cl.visits || 0) / maxVisits * 100)}%"></div></div></div>
+          <div class="mono">${esc((cl.visits || 0) + ' visits')}</div>
+          <div class="muted mono">${esc(cl.avg_per_session + '/session')}</div>
+        </div>`).join('')}
+    </div>
+    <div>
+      <div class="section">
+        <div class="section-title">Instructor Demand</div>
+        ${data.instructors.slice(0, 6).map((ins, i) => '<div class="side-row"><span>' + (i + 1) + '. ' + esc(ins.name || 'Instructor') + '</span><strong class="mono">' + esc(ins.avg_per_class || 0) + '/class</strong></div>').join('') || '<div class="muted" style="font-size:11px">No instructor data uploaded.</div>'}
+      </div>
+      <div class="section">
+        <div class="section-title">Peak Times</div>
+        ${data.peakTimes.slice(0, 5).map(t => '<div class="side-row"><span>' + esc(t.time || '') + '</span><strong class="mono">' + esc(t.visits || 0) + '</strong></div>').join('') || '<div class="muted" style="font-size:11px">No time data uploaded.</div>'}
+      </div>
+      <div class="section">
+        <div class="section-title">Busiest Days</div>
+        ${data.peakDays.slice(0, 7).map(d => '<div class="side-row"><span>' + esc(d.day || '') + '</span><strong class="mono">' + esc(d.visits || 0) + '</strong></div>').join('') || '<div class="muted" style="font-size:11px">No day data uploaded.</div>'}
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span>Prepared for coordinator follow-up</span><span>Source: uploaded Mindbody CSVs</span></div>
+</div>`;
+
+  document.getElementById('classPerformancePrintStyle')?.remove();
+  document.querySelector('.class-export-print-root')?.remove();
+  document.head.appendChild(printStyle);
+  document.body.appendChild(printRoot);
+
+  const cleanup = () => {
+    printRoot.remove();
+    printStyle.remove();
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+  window.print();
+  setTimeout(cleanup, 1500);
 }
 
 function renderHeader() {
