@@ -1380,36 +1380,21 @@ function handleDorianDownload() {
   const current = state.dashData?.current || {};
   const dorian = current.dorian || {};
   const newMembers = current.new_founder_members || [];
-  const blank = { segment:'', name:'', membership:'', email:'', phone:'', member_since:'', last_visit:'', days_absent:'', days_since_join:'', lifetime_visits:'', checkins_30:'', visits_so_far:'', cancel_date:'', suggested_action:'' };
+  const blank = { segment:'', name:'', membership:'', email:'', phone:'', member_since:'', last_visit:'', days_absent:'', "Gracie's notes":'' };
 
-  const map = (rows, segment, actionFn) => rows.map(m => ({
+  const map = (rows, segment) => rows.map(m => ({
     ...blank, segment,
     name: m.name||'', membership: m.membership||'', email: m.email||'', phone: m.phone||'',
-    member_since: m.member_since||'', last_visit: m.last_visit||'',
+    member_since: m.member_since||'', last_visit: m.last_visit || (segment === 'Urgent - Never Visited' ? '-' : ''),
     days_absent: m.days_absent ?? '',
-    days_since_join: computeDaysSinceJoin(m.member_since) ?? '',
-    lifetime_visits: m.lifetime_visits ?? '',
-    checkins_30: m.checkins_30 ?? '',
-    visits_so_far: m.visits_so_far ?? '',
-    cancel_date: m.cancel_date||'',
-    suggested_action: actionFn ? actionFn(m) : '',
   }));
 
   const all = [
-    ...map(dorian.watch || [], 'At Risk - 1-2 visits/month', m => {
-      const d = m.days_absent || 0;
-      if (d >= 14) return 'Send personal text - has not visited in ' + d + ' days';
-      return 'Quick text check-in - book a class this week';
-    }),
-    ...map(dorian.never_visited || [], 'Urgent - Never Visited', m => 'Call within 48h - onboarding offer'),
-    ...map(dorian.critical || [], 'Urgent - 14-29 days no visit', m => 'Personal call - identify barrier'),
-    ...map(dorian.lost || [], 'Urgent - 30+ days no visit', m => 'Win-back call - free class offer'),
-    ...map(newMembers, 'New This Week', m => {
-      const v = m.visits_so_far || 0;
-      if (v === 0) return 'URGENT - call within 48h, book first class';
-      if (v === 1) return 'Suggest second class this week';
-      return 'Track to 5-visit milestone';
-    }),
+    ...map(dorian.watch || [], 'At Risk - 1-2 visits/month'),
+    ...map(dorian.never_visited || [], 'Urgent - Never Visited'),
+    ...map(dorian.critical || [], 'Urgent - 14-29 days no visit'),
+    ...map(dorian.lost || [], 'Urgent - 30+ days no visit'),
+    ...map(newMembers, 'New This Week'),
   ];
 
   if (!all.length) return alert('No members in action list.');
