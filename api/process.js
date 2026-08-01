@@ -44,27 +44,38 @@ export default async function handler(req, res) {
       sales_total:         data.sales_total,           // Now = non-membership sales only
       non_autopay_total:   data.non_autopay_total,     // Same as sales_total, kept for clarity
       mrr:                 data.mrr,                   // Browser-calculated tier MRR
-      total_weekly_revenue:data.total_weekly_revenue,  // mrr + non_autopay
+      weekly_mrr_equivalent:data.weekly_mrr_equivalent,
+      weekly_revenue_run_rate:data.weekly_revenue_run_rate,
+      monthly_revenue_run_rate:data.monthly_revenue_run_rate,
+      annual_revenue_run_rate:data.annual_revenue_run_rate,
+      recurring_revenue_pct:data.recurring_revenue_pct,
+      total_weekly_revenue:data.weekly_revenue_run_rate,
       active_count:        data.active_count,
-      new_this_week:       data.first_visit_count,
+      new_this_week:       data.new_member_count,
       cancelled_count:     data.cancelled_count,
-      flow_net_growth:     data.first_visit_count - data.cancelled_count,
+      flow_net_growth:     data.new_member_count - data.cancelled_count,
       first_time_visitors: data.first_time_visitors,
       no_show_count:       data.no_show_count,
-      avg_founder_visits:  data.avg_founder_visits,
-      avg_member_visits:   data.avg_founder_visits,
+      no_show_rate_pct:    data.no_show_rate_pct,
+      total_bookings:      data.total_bookings,
+      total_visits:        data.total_visits,
+      avg_founder_visits:  data.avg_member_visits,
+      avg_member_visits:   data.avg_member_visits,
       health_summary:      data.health_summary,
       total_sessions:      data.total_sessions,
       avg_per_session:     data.avg_per_session,
       failed_payments:     (data.failed_payments     || []).slice(0, 20),
       no_return_members:   (data.no_return_members   || []).slice(0, 10),
       cancelled_members:   (data.cancelled_members   || []).slice(0, 5),
-      new_founder_members: (data.new_founder_members || []).slice(0, 5),
+      new_members:         (data.new_members         || []).slice(0, 10),
+      new_founder_members: (data.new_members         || []).slice(0, 10),
       member_product_counts: data.member_product_counts || {},
+      member_product_mrr:  data.member_product_mrr || {},
+      data_quality:        data.data_quality || {},
       class_data:          (data.class_data          || []).slice(0, 10),
       class_schedule:      (data.class_schedule      || []).slice(0, 60),
-      founder_classes:     (data.founder_classes     || []).slice(0, 5),
-      member_classes:      (data.founder_classes     || []).slice(0, 5),
+      founder_classes:     (data.member_classes      || []).slice(0, 5),
+      member_classes:      (data.member_classes      || []).slice(0, 5),
       instructor_data:     (data.instructor_data     || []).slice(0, 5),
       peak_times:          (data.peak_times          || []).slice(0, 5),
       peak_days:           (data.peak_days           || []).slice(0, 7),
@@ -77,7 +88,7 @@ export default async function handler(req, res) {
         new_this_week: previous.membership?.new_this_week || 0,
         churned:       previous.membership?.churned_this_week || 0,
         mrr:           previous.revenue?.mrr || 0,
-        avg_visits:    previous.avg_founder_visits || 0,
+        avg_visits:    previous.avg_member_visits ?? previous.avg_founder_visits ?? 0,
       };
     }
 
@@ -142,7 +153,7 @@ function buildPrompt(data, history) {
 ABOUT PRANA:
 - Target: 800 active paid members at full capacity
 - Services: Pilates Reformer, Heated Sculpt, Heated Mat Pilates, Prana Vinyasa Flow, Yin, Private
-- Revenue model: MRR is already calculated by the browser from active Founder, Prana, and Prana Plus members and their monthly amounts.
+- Revenue model: MRR is calculated from active Founder, Prana, and Prana Plus members. Weekly and monthly run rates put MRR and non-autopay sales on the same time basis.
 - Key staff: Dorian owns active member retention and outreach
 - MRR target: >70% of total revenue should be active member autopay
 - CRITICAL: Reference active Founder, Prana, and Prana Plus members in membership analysis. Never mention ClassPass, Friends and Family, or drop-ins except as an acquisition opportunity in bright_spot only.
@@ -152,16 +163,21 @@ IMPORTANT DATA NOTES:
 - mrr = browser-calculated active member MRR (this is the canonical MRR — always use this)
 - non_autopay_total = sum of 01_sales Item Total EXCLUDING Founder/Prana/Prana Plus membership purchases (drop-ins, packs, late fees, no-show fees)
 - sales_total alias = non_autopay_total (same value)
-- total_weekly_revenue = mrr + non_autopay_total (the CEO-level "Weekly Sales" figure)
+- weekly_mrr_equivalent = mrr × 12 ÷ 52
+- weekly_revenue_run_rate = weekly_mrr_equivalent + this week's non_autopay_total
+- monthly_revenue_run_rate = mrr + this week's non_autopay_total × 52 ÷ 12
+- annual_revenue_run_rate = mrr × 12 + this week's non_autopay_total × 52
+- total_weekly_revenue is a compatibility alias for weekly_revenue_run_rate
+- recurring_revenue_pct compares MRR with monthly_revenue_run_rate, so numerator and denominator use the same time basis
 - active_count = active Founder + Prana + Prana Plus members
 - member_product_counts = count split for Founder vs Prana vs Prana Plus when available
-- new_this_week = active members who joined THIS WEEK ONLY (not cumulative)
+- new_this_week = active members whose membership start date is within the selected Monday-Sunday week (not cumulative)
 - cancelled_count = active members who cancelled THIS WEEK ONLY (not cumulative)
 - flow_net_growth = new_this_week minus cancelled_count; this is acquisition/churn flow only
 - avg_founder_visits = average visits per active member this week. Target is 3+/week.
 - avg_member_visits is the same metric as avg_founder_visits; avg_founder_visits is a legacy JSON key and is not Founder-only.
 - health_summary = {green: 3+visits/month, amber: 1-2 visits/month, red: 0 visits or 21+ days absent}
-- failed_payments = active members whose autopay charge was Suspended or Declined this week — these are revenue at risk
+- failed_payments = membership autopay charges that did not have a successful payment status this week — these are revenue at risk
 - total_sessions = total class sessions held this week (denominator for "average attendance per session")
 - avg_per_session = total_visits ÷ total_sessions (typical class size — use this NOT total visits when discussing class performance)
 - class_schedule = optional current schedule CSV, normalized as class name, day/date, time, instructor, room, capacity, booked, waitlist. Use it to compare current attendance patterns against what is actually on the schedule.
@@ -170,12 +186,12 @@ IMPORTANT DATA NOTES:
 CALCULATION RULES:
 - mrr is already calculated; do NOT recompute
 - pack_and_class = non_autopay_total
-- mrr_pct = round(mrr / total_weekly_revenue * 100)
-- revenue_per_member = round(total_weekly_revenue / active_count)  ← uses TOTAL revenue, not just MRR
+- mrr_pct = recurring_revenue_pct
+- revenue_per_member = round(monthly_revenue_run_rate / active_count)
 - net_growth = active_count minus previous_week.active_count when previous_week exists; otherwise use flow_net_growth for the first upload only
 - If net_growth differs from flow_net_growth, the difference is other_status_changes caused by status movement such as Suspended/Declined members returning to Active. Do not call this a calculation mismatch.
 - churned_this_week = cancelled_count
-- churn_rate_pct = round(cancelled_count / active_count * 100, 1)
+- churn_rate_pct uses the previous week's active count when available, otherwise the current active count
 - progress_to_800_pct = round(active_count / 800 * 100)
 - failed_payment_count = length of failed_payments array
 - arr_at_risk = browser-calculated annualised value at risk if these cards aren't fixed
@@ -185,7 +201,7 @@ CALCULATION RULES:
 - lost = members with 0 visits for 30+ days, MAX 10
 - win_back = cancelled_members list as-is
 - total_visits = sum of all visits in class_data
-- no_show_rate_pct = round(no_show_count / total_visits * 100)
+- no_show_rate_pct = round(no_show_count / total_bookings * 100), where total_bookings = attended visits + no-shows/late cancels
 - top_classes = top 3 by visits descending
 - bottom_classes = bottom 3 by visits ascending, exclude 0 visits
 

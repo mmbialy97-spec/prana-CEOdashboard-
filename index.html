@@ -6,8 +6,18 @@
 <title>Prana Wellness — CEO Dashboard</title>
 <!--
 ═══════════════════════════════════════════════════════════════════
-  CHANGELOG (2026-05-26)
+  CHANGELOG (2026-08-01)
   ────────────────────────────────────────────────────────────────
+  CEO metric audit:
+  - New members are bounded to the selected Monday-Sunday week.
+  - Revenue metrics now compare weekly and monthly values on the
+    same time basis instead of adding monthly MRR to weekly sales.
+  - Active statuses, member visit IDs, late-cancel rates, and
+    historical week reconciliation are calculated deterministically.
+  - New active-member keys replace legacy founder_* names while
+    retaining fallbacks for previously saved weeks.
+  ────────────────────────────────────────────────────────────────
+  Previous changes (2026-05-26):
   Membership product update:
   - Active member logic now supports Founder, Prana, and Prana Plus.
   - MRR uses tier pricing: Founder $200, Prana $249, Prana Plus $379.
@@ -43,7 +53,7 @@
   2. MRR now = active_count × $200.
   3. Pack & Class Sales now SUMS 01_sales Item Total ONLY for
      rows where Item name does NOT contain "Founder".
-  4. Weekly Sales redefined = MRR + non-autopay.
+  4. Revenue presentation updated (superseded by the 2026-08 period-alignment audit).
   5. MRR Stability copy fixed.
   6. Revenue/Member redefined = total weekly revenue ÷ active.
   7. Class avg copy now uses avg_per_session.
@@ -262,10 +272,14 @@ const GROUPS = ['Revenue','Membership','Attendance'];
 const REQUIRED_COUNT = EXPECTED.length;
 
 const DEFAULT_MEMBER_PRICE = 249;
+const WEEKS_PER_YEAR = 52;
+const MONTHS_PER_YEAR = 12;
+const ACTIVE_MEMBER_STATUSES = new Set(['active','current','paid','enabled']);
+const SUCCESSFUL_PAYMENT_STATUSES = new Set(['success','successful','succeeded','paid','processed','approved']);
 const MEMBER_PRODUCTS = [
   {key:'founder', label:'Founder', price:200, aliases:['founder','founding','founder member','founder membership','founding member','founding membership']},
-  {key:'prana_plus', label:'Prana Plus', price:379, aliases:['prana plus','prana+','prana +','prana unlimited plus','prana membership plus','prana plus membership']},
-  {key:'prana', label:'Prana', price:249, aliases:['prana','prana membership','prana unlimited']},
+  {key:'prana_plus', label:'Prana Plus', price:379, aliases:['prana plus','prana+','prana +','prana plus member','prana plus membership','prana membership plus','prana unlimited plus','prana plus monthly','prana plus annual','prana plus yearly']},
+  {key:'prana', label:'Prana', price:249, aliases:['prana','prana member','prana membership','prana unlimited','prana monthly','prana annual','prana yearly']},
 ];
 
 // ─── State ────────────────────────────────────────────────────────
@@ -514,11 +528,57 @@ function parseMoney(value) {
   const n = Number(String(value || '').replace(/[$,]/g,''));
   return Number.isFinite(n) ? n : 0;
 }
+function parseDashboardDate(value) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  let year, month, day;
+  if (match) {
+    year = Number(match[1]); month = Number(match[2]); day = Number(match[3]);
+  } else {
+    match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (match) {
+      month = Number(match[1]); day = Number(match[2]); year = Number(match[3]);
+      if (year < 100) year += 2000;
+    }
+  }
+  if (!match) {
+    const fallback = new Date(text);
+    if (isNaN(fallback)) return null;
+    return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate());
+  }
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
+}
+function isDateInRange(value, start, end) {
+  const date = parseDashboardDate(value);
+  return Boolean(date && date >= start && date <= end);
+}
+function weekEndFromWeekOf(weekOf) {
+  const start = parseDashboardDate(weekOf);
+  if (!start) return null;
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6, 23, 59, 59, 999);
+}
+function includesProductPhrase(text, phrase) {
+  return text === phrase || text.startsWith(phrase + ' ') || text.endsWith(' ' + phrase) || text.includes(' ' + phrase + ' ');
+}
+function matchesMemberProductAlias(text, alias) {
+  if (!includesProductPhrase(text, alias)) return false;
+  const bareAliases = new Set(['founder','founding','prana','prana plus','prana+','prana +']);
+  if (!bareAliases.has(alias) || text === alias) return true;
+  const descriptors = new Set(['member','membership','monthly','month','annual','annually','yearly','year','unlimited','autopay','recurring','plan']);
+  const remainder = text.replace(alias, '').trim();
+  return Boolean(remainder) && remainder.split(' ').every(token => descriptors.has(token) || /^\$?\d+(?:\.\d+)?$/.test(token));
+}
 function memberProductFromText(value) {
   const text = normProductText(value);
   if (!text) return null;
-  const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => text.includes(alias)));
+  const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => matchesMemberProductAlias(text, alias)));
   return product ? product.key : null;
+}
+function isSuccessfulPaymentStatus(value) {
+  const status = normProductText(value);
+  return [...SUCCESSFUL_PAYMENT_STATUSES].some(success => status === success || status.startsWith(success + ' '));
 }
 function memberProductPrice(key) {
   return MEMBER_PRODUCTS.find(p => p.key === key)?.price || DEFAULT_MEMBER_PRICE;
@@ -567,6 +627,7 @@ function renderDashboard() {
   const hs     = c.health_summary|| {};
   const tab    = state.tab       || 'overview';
   const productCounts = c.member_product_counts || {};
+  const productMrr = c.member_product_mrr || {};
   const hasProductCounts = Object.keys(productCounts).length > 0;
   const productCount = (label, key) => productCounts[label] ?? productCounts[key] ?? 0;
   const founderCount = productCount('Founder', 'founder') || (!hasProductCounts ? (m.active_count || 0) : 0);
@@ -576,10 +637,19 @@ function renderDashboard() {
     ? `${founderCount} Founder · ${pranaCount} Prana · ${pranaPlusCount} Prana Plus`
     : `${m.active_count || 0} Founder · legacy week`;
 
-  const newFounders   = c.new_founder_members || [];
+  const newMembers    = c.new_members || c.new_founder_members || [];
   const failed        = c.failed_payments || [];
-  const memberVisits = (c.founder_classes||[]).reduce((s,cl)=>s+(cl.member_visits ?? cl.founder_visits ?? 0),0);
+  const memberClasses = c.member_classes || c.founder_classes || [];
+  const memberVisits = memberClasses.reduce((s,cl)=>s+(cl.member_visits ?? cl.founder_visits ?? 0),0);
+  const avgMemberVisits = c.avg_member_visits ?? c.avg_founder_visits ?? 0;
   const avgMemberPrice = (m.active_count || 0) > 0 ? Math.round((r.mrr || 0) / m.active_count) : DEFAULT_MEMBER_PRICE;
+  const newMemberProductCounts = newMembers.reduce((counts, member) => {
+    const key = memberProductFromText(member.membership);
+    const label = MEMBER_PRODUCTS.find(product => product.key === key)?.label;
+    if (label) counts[label] = (counts[label] || 0) + 1;
+    return counts;
+  }, {});
+  const newMemberMixSub = `${newMemberProductCounts['Founder'] || 0} Founder · ${newMemberProductCounts['Prana'] || 0} Prana · ${newMemberProductCounts['Prana Plus'] || 0} Prana Plus`;
 
   // ─── FIX C: Hide WoW deltas when comparing corrected current → uncorrected previous ──
   // Prevents fake regression signals during the methodology transition week.
@@ -623,9 +693,9 @@ function renderDashboard() {
       <div style="font-size:11px;color:var(--ink-3);margin-top:6px">${sub}${wowHtml||''}</div>
     </div>`;
   const mixRows = [
-    {label:'Founder', count: founderCount, price:200},
-    {label:'Prana', count: pranaCount, price:249},
-    {label:'Prana Plus', count: pranaPlusCount, price:379},
+    {label:'Founder', count: founderCount, price:200, mrr:productMrr.Founder ?? founderCount * 200},
+    {label:'Prana', count: pranaCount, price:249, mrr:productMrr.Prana ?? pranaCount * 249},
+    {label:'Prana Plus', count: pranaPlusCount, price:379, mrr:productMrr['Prana Plus'] ?? pranaPlusCount * 379},
   ];
   const maxMixCount = Math.max(...mixRows.map(row => row.count), 1);
   const membershipMixCard = `
@@ -644,11 +714,18 @@ function renderDashboard() {
             <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:6px">
               <div style="height:100%;width:${Math.round(row.count/maxMixCount*100)}%;background:var(--green);border-radius:3px"></div>
             </div>
-            <div style="font-size:11px;color:var(--ink-3)">${fmtC(row.count * row.price)}/mo · ${fmtC(row.price)} each</div>
+            <div style="font-size:11px;color:var(--ink-3)">${fmtC(row.mrr)}/mo · ${fmtC(row.price)} each</div>
           </div>
         `).join('')}
       </div>
     </div>`;
+  const quality = c.data_quality || {};
+  const qualityIssues = (quality.unknown_product_labels || []).length + (quality.rows_without_identity || 0);
+  const dataQualityNote = Object.keys(quality).length ? `
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;background:${qualityIssues ? 'var(--amber-light)' : 'var(--green-light)'};border:1px solid ${qualityIssues ? 'var(--amber)' : 'var(--green)'};border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--ink-2)">
+      <span><strong style="color:${qualityIssues ? 'var(--amber)' : 'var(--green)'}">Data check:</strong> ${quality.counted_members || 0} counted · ${quality.duplicates_merged || 0} duplicate${quality.duplicates_merged === 1 ? '' : 's'} merged · ${(quality.unknown_product_labels || []).length} unknown plan${(quality.unknown_product_labels || []).length === 1 ? '' : 's'}</span>
+      ${(quality.unknown_product_labels || []).length ? `<span style="font-family:var(--mono);font-size:11px">Review: ${quality.unknown_product_labels.map(esc).join(', ')}</span>` : '<span style="color:var(--green)">Counts reconcile</span>'}
+    </div>` : '';
 
   const tabs = [
     {id:'overview', label:'Overview'},
@@ -697,13 +774,14 @@ function renderDashboard() {
   const tabOverview = `
     ${baselineNote}
     ${reconBanner}
+    ${dataQualityNote}
     <div class="g3" style="margin-bottom:20px">
       ${pulse('MRR', fmtC(r.mrr), (m.active_count||0) + ' members · avg $' + avgMemberPrice, 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
       ${pulse('Active Members', m.active_count||'—', productSplitSub, 'var(--ink)', wow(m.active_count, p?.membership?.active_count, false))}
       ${pulse('Net Growth', signed(m.net_growth||0), memberMovementSub(), (m.net_growth||0)>0?'var(--green)':(m.net_growth||0)<0?'var(--red)':'var(--ink)')}
       ${pulse('Member Health', hs.green||0, '<span style="color:var(--amber)">●'+(hs.amber||0)+' at risk</span> &nbsp;<span style="color:var(--red)">●'+(hs.red||0)+' urgent</span>', 'var(--green)')}
-      ${pulse('Avg Visits / Member', (c.avg_founder_visits||0)+'/wk', 'Target: 3+ per week', (c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)')}
-      ${pulse('Forecasted ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
+      ${pulse('Avg Visits / Member', avgMemberVisits+'/wk', 'Target: 3+ per week', avgMemberVisits>=3?'var(--green)':avgMemberVisits>=2?'var(--amber)':'var(--red)')}
+      ${pulse('Membership ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
     </div>
     ${membershipMixCard}
 
@@ -752,14 +830,15 @@ function renderDashboard() {
 
   // ─── TAB: MEMBERS ────────────────────────────────────────────────
   const tabMembers = `
+    ${dataQualityNote}
     ${membershipMixCard}
     <div class="g4" style="margin-bottom:16px">
       ${pulse('Active Members', m.active_count||'—', productSplitSub, 'var(--ink)')}
       ${pulse('Founder', founderCount, '$200/mo', 'var(--green)')}
       ${pulse('Prana', pranaCount, '$249/mo', 'var(--green)')}
       ${pulse('Prana Plus', pranaPlusCount, '$379/mo', 'var(--green)')}
-      ${pulse('New This Week', m.new_this_week||0, 'Joined as active members', 'var(--green)')}
-      ${pulse('Churned', m.churned_this_week||0, fmtPct(m.churn_rate_pct)+' churn rate', (m.churned_this_week||0)>0?'var(--red)':'var(--ink)')}
+      ${pulse('New This Week', m.new_this_week||0, newMemberMixSub, 'var(--green)')}
+      ${pulse('Churned', m.churned_this_week||0, fmtPct(m.churn_rate_pct)+' of prior active base', (m.churned_this_week||0)>0?'var(--red)':'var(--ink)')}
     </div>
 
     ${renderHealthSummary(c)}
@@ -773,25 +852,30 @@ function renderDashboard() {
       </div>
       <button class="btn-primary" onclick="handleDorianDownload()">⬇ Download CSV</button>
     </div>
-    ${renderDorianList(dorian, newFounders)}`;
+    ${renderDorianList(dorian, newMembers)}`;
 
   // ─── TAB: REVENUE ────────────────────────────────────────────────
-  const totalWeekly = (r.total_weekly || ((r.mrr||0) + (r.pack_and_class||0)));
-  const revPerMember = (m.active_count||0) > 0 ? Math.round(totalWeekly / m.active_count) : 0;
+  const weeklyMrrEquivalent = r.weekly_mrr_equivalent ?? Math.round((r.mrr || 0) * MONTHS_PER_YEAR / WEEKS_PER_YEAR);
+  const weeklyRevenueRunRate = r.weekly_revenue_run_rate ?? r.total_weekly ?? Math.round(weeklyMrrEquivalent + (r.pack_and_class || 0));
+  const monthlyRevenueRunRate = r.monthly_revenue_run_rate ?? Math.round((r.mrr || 0) + (r.pack_and_class || 0) * WEEKS_PER_YEAR / MONTHS_PER_YEAR);
+  const annualRevenueRunRate = r.annual_revenue_run_rate ?? Math.round(monthlyRevenueRunRate * MONTHS_PER_YEAR);
+  const revPerMember = (m.active_count||0) > 0 ? Math.round(monthlyRevenueRunRate / m.active_count) : 0;
 
   const tabRevenue = `
-    <div class="g2" style="margin-bottom:16px">
+    <div class="g3" style="margin-bottom:16px">
       ${pulse('MRR', fmtC(r.mrr), (m.active_count||0) + ' active members · avg $' + avgMemberPrice, 'var(--green)', wow(r.mrr, p?.revenue?.mrr, true))}
-      ${pulse('Forecasted ARR', fmtC((r.mrr||0)*12), 'MRR × 12 months', 'var(--green)')}
-      ${pulse('Revenue / Member', fmtC(revPerMember), 'Total weekly revenue ÷ ' + (m.active_count||0) + ' members', 'var(--ink)')}
-      ${pulse('Weekly Sales', fmtC(totalWeekly), 'MRR contribution + non-autopay this week', 'var(--ink)')}
+      ${pulse('Membership ARR', fmtC((r.mrr||0)*12), 'Recurring memberships only', 'var(--green)')}
+      ${pulse('Est. Weekly Revenue', fmtC(weeklyRevenueRunRate), fmtC(weeklyMrrEquivalent) + ' weekly MRR + ' + fmtC(r.pack_and_class||0) + ' non-autopay', 'var(--ink)')}
+      ${pulse('Monthly Run Rate', fmtC(monthlyRevenueRunRate), 'MRR + weekly non-autopay × 52 ÷ 12', 'var(--ink)')}
+      ${pulse('Revenue / Member', fmtC(revPerMember), 'Monthly run rate ÷ ' + (m.active_count||0) + ' members', 'var(--ink)')}
+      ${pulse('Annual Run Rate', fmtC(annualRevenueRunRate), 'Membership + non-autopay annualised', 'var(--green)')}
     </div>
 
     <div class="g2">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)">
         <div style="font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--ink-3);text-transform:uppercase;margin-bottom:16px">MRR Stability</div>
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-          <span style="font-size:13px;color:var(--ink-2)">MRR as % of total revenue</span>
+          <span style="font-size:13px;color:var(--ink-2)">Recurring share of revenue run rate</span>
           <span style="font-family:var(--mono);font-size:16px;font-weight:600;color:${(r.mrr_pct||0)>=70?'var(--green)':'var(--amber)'}">${r.mrr_pct||0}%</span>
         </div>
         <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:10px">
@@ -945,8 +1029,8 @@ function renderDashboard() {
     ${classInsightsBlock}
     <div class="g4" style="margin-bottom:16px">
       ${pulse('Total Check-ins', totalVisits.toLocaleString(), totalSessions + ' sessions · ' + avgPerSession + ' avg/session', 'var(--ink)')}
-      ${pulse('Member Visits', memberVisits, (c.avg_founder_visits||0)+' avg / member', (c.avg_founder_visits||0)>=3?'var(--green)':(c.avg_founder_visits||0)>=2?'var(--amber)':'var(--red)')}
-      ${pulse('Late Cancels', fmtPct(a.no_show_rate_pct||0), 'Of all bookings', (a.no_show_rate_pct||0)>10?'var(--amber)':'var(--ink)')}
+      ${pulse('Member Visits', memberVisits, avgMemberVisits+' avg / member', avgMemberVisits>=3?'var(--green)':avgMemberVisits>=2?'var(--amber)':'var(--red)')}
+      ${pulse('No-Show / Late Cancel', fmtPct(a.no_show_rate_pct||0), (a.no_show_count||0) + ' of ' + (a.total_bookings||0) + ' bookings', (a.no_show_rate_pct||0)>10?'var(--amber)':'var(--ink)')}
       ${pulse('First-Time Visitors', c.first_time_visitors||0, 'Acquisition pipeline', 'var(--green)')}
     </div>
 
@@ -1369,9 +1453,10 @@ function renderNewMemberSection(newMembers) {
 function computeDaysSinceJoin(memberSince) {
   if (!memberSince) return null;
   try {
-    const d = new Date(memberSince);
-    if (isNaN(d)) return null;
-    const diff = Math.floor((Date.now() - d.getTime()) / 86400000);
+    const d = parseDashboardDate(memberSince);
+    if (!d) return null;
+    const asOf = weekEndFromWeekOf(state.selectedWeek || state.dashData?.current?.week_of) || new Date();
+    const diff = Math.floor((asOf.getTime() - d.getTime()) / 86400000);
     return diff < 0 ? null : diff;
   } catch { return null; }
 }
@@ -1379,7 +1464,7 @@ function computeDaysSinceJoin(memberSince) {
 function handleDorianDownload() {
   const current = state.dashData?.current || {};
   const dorian = current.dorian || {};
-  const newMembers = current.new_founder_members || [];
+  const newMembers = current.new_members || current.new_founder_members || [];
   const blank = { segment:'', name:'', membership:'', email:'', phone:'', member_since:'', last_visit:'', days_absent:'', "Gracie's notes":'' };
 
   const map = (rows, segment) => rows.map(m => ({
@@ -1426,7 +1511,7 @@ function buildClassPerformanceExportData(current) {
   const totalSessions = current.total_sessions || classes.reduce((sum, cl) => sum + (cl.sessions_count || 0), 0);
   const totalVisits = attendance.total_visits || classes.reduce((sum, cl) => sum + (cl.visits || 0), 0);
   const avgPerSession = totalSessions > 0 ? Math.round(totalVisits / totalSessions * 10) / 10 : 0;
-  const memberVisits = (current.founder_classes || []).reduce((sum, cl) => sum + (cl.member_visits ?? cl.founder_visits ?? 0), 0);
+  const memberVisits = (current.member_classes || current.founder_classes || []).reduce((sum, cl) => sum + (cl.member_visits ?? cl.founder_visits ?? 0), 0);
   const highCancelClasses = classes.filter(cl => (cl.late_cancels || 0) >= 10).sort((a,b) => (b.late_cancels || 0) - (a.late_cancels || 0));
   const underperforming = classes.filter(cl => cl.avg_per_session < avgPerSession * 0.7 && (cl.visits || 0) > 0);
   const topInstructor = instructors[0] || null;
@@ -1456,7 +1541,7 @@ function buildClassPerformanceExportData(current) {
     totalVisits,
     avgPerSession,
     memberVisits,
-    lateCancelRate: attendance.no_show_rate_pct || 0,
+    bookingExceptionRate: attendance.no_show_rate_pct || 0,
     firstTimeVisitors: current.first_time_visitors || 0,
     classes,
     instructors,
@@ -1530,7 +1615,7 @@ function handleClassPerformanceExport() {
     ${metricTile('Total Check-ins', data.totalVisits.toLocaleString(), data.totalSessions + ' sessions')}
     ${metricTile('Avg / Session', data.avgPerSession, 'studio benchmark')}
     ${metricTile('Member Visits', data.memberVisits, 'tracked member check-ins')}
-    ${metricTile('First-Time Visitors', data.firstTimeVisitors, fmtPct(data.lateCancelRate) + ' late cancel rate')}
+    ${metricTile('First-Time Visitors', data.firstTimeVisitors, fmtPct(data.bookingExceptionRate) + ' no-show / late cancel rate')}
   </div>
   <div class="section">
     <div class="section-title">Coordinator Actions This Week</div>
@@ -1716,16 +1801,18 @@ function aggregateData() {
       (memberLastName(row) || '').trim()).trim() ||
       fixName(firstValue(row, ['Name','Client','Client Name']));
   }
-  function memberProduct(row) {
-    const type = normText(firstValue(row, [
+  function membershipValue(row) {
+    return firstValue(row, [
       'Membership Type','Membership','Membership tier','Membership Tier','Pricing Option',
       'Membership Name','Membership Option','Membership Program','Contract Name',
       'Plan','Plan Name','Product','Product Name','Subscription','Subscription Plan',
       'Item','Item name','Item Name','Service','Service Name'
-    ]));
+    ]);
+  }
+  function memberProduct(row) {
+    const type = normText(membershipValue(row));
     if (!type) return null;
-    const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => type.includes(alias)));
-    return product ? product.key : null;
+    return memberProductFromText(type);
   }
   function memberProductLabel(key) {
     return MEMBER_PRODUCTS.find(p => p.key === key)?.label || '';
@@ -1736,32 +1823,32 @@ function aggregateData() {
   function memberProductFromText(value) {
     const text = normText(value);
     if (!text) return null;
-    const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => text.includes(alias)));
+    const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => matchesMemberProductAlias(text, alias)));
     return product ? product.key : null;
   }
   function isActiveMemberRow(row, assumeActive) {
     const product = memberProduct(row);
     if (!product) return false;
     const status = normText(firstValue(row, ['Status','Member Status','Subscription Status']));
-    return assumeActive || !status || ['active','current','paid','enabled'].includes(status);
+    return status ? ACTIVE_MEMBER_STATUSES.has(status) : assumeActive;
   }
   function memberMonthlyAmount(row) {
     const monthlyAmount = toNum(firstValue(row, [
       'Monthly Amount','Monthly Price','Membership Price','Autopay Amount','AutoPay Amount',
-      'Recurring Amount','Contract Amount'
+      'Recurring Amount'
     ]));
-    return monthlyAmount > 0 ? monthlyAmount : memberProductPrice(memberProduct(row));
+    if (monthlyAmount > 0) return monthlyAmount;
+    const annualAmount = toNum(firstValue(row, ['Annual Amount','Annual Price','Yearly Amount','Yearly Price']));
+    return annualAmount > 0 ? annualAmount / MONTHS_PER_YEAR : memberProductPrice(memberProduct(row));
   }
   function rowHasMembershipField(row) {
-    return Boolean(firstValue(row, [
-      'Membership Type','Membership','Membership tier','Membership Tier','Pricing Option',
-      'Membership Name','Membership Option','Membership Program','Contract Name',
-      'Plan','Plan Name','Product','Product Name','Subscription','Subscription Plan',
-      'Item','Item name','Item Name','Service','Service Name'
-    ]));
+    return Boolean(membershipValue(row));
   }
   function isMemberProductRow(row) {
     return Boolean(memberProduct(row)) || !rowHasMembershipField(row);
+  }
+  function memberSinceValue(row) {
+    return firstValue(row, ['Member Since','Membership Start','Membership Start Date','Start Date','Start date','Join Date','Joined']);
   }
   function memberKeys(row) {
     const keys = [];
@@ -1775,6 +1862,7 @@ function aggregateData() {
     if (phone) keys.push('phone:' + phone);
     return keys;
   }
+  const memberMergeStats = {duplicatesMerged:0, rowsWithoutIdentity:0};
   function mergeMemberSources(primaryRows, secondaryRows, primaryAssumeActive = false, secondaryAssumeActive = true) {
     const seen = new Set();
     const rows = [];
@@ -1787,8 +1875,10 @@ function aggregateData() {
     const addRow = (row, assumeActive) => {
       if (!isActiveMemberRow(row, assumeActive)) return;
       const keys = memberKeys(row);
+      if (!keys.length) memberMergeStats.rowsWithoutIdentity++;
       const existingKey = keys.find(key => rowByKey[key]);
       if (existingKey) {
+        memberMergeStats.duplicatesMerged++;
         mergeMissingFields(rowByKey[existingKey], row);
         keys.forEach(key => {
           seen.add(key);
@@ -1957,8 +2047,25 @@ function aggregateData() {
     if (label) acc[label] = (acc[label] || 0) + 1;
     return acc;
   }, {});
+  const member_product_mrr = activeMemberRows.reduce((acc, r) => {
+    const label = memberProductLabel(memberProduct(r));
+    if (label) acc[label] = (acc[label] || 0) + memberMonthlyAmount(r);
+    return acc;
+  }, {});
 
-  // MRR = sum of active Prana/Prana Plus monthly amounts; defaults to the configured tier price when the export has no amount column.
+  const potentialActiveRows = [
+    ...activeRows.filter(r => {
+      const status = normText(firstValue(r, ['Status','Member Status','Subscription Status']));
+      return !status || ACTIVE_MEMBER_STATUSES.has(status);
+    }),
+    ...retMgmtRows.filter(r => ACTIVE_MEMBER_STATUSES.has(normText(firstValue(r, ['Status','Member Status','Subscription Status'])))),
+  ];
+  const unknownProductLabels = [...new Set(potentialActiveRows
+    .filter(r => rowHasMembershipField(r) && !memberProduct(r))
+    .map(r => membershipValue(r))
+    .filter(Boolean))];
+
+  // MRR = active monthly membership amounts, defaulting to tier price when the export has no amount column.
   const mrr = activeMemberRows.reduce((s,r) => s + memberMonthlyAmount(r), 0);
 
   // Pack & Class Sales — exclude membership purchases
@@ -1968,15 +2075,21 @@ function aggregateData() {
     return s + toNum(r['Item Total'] || r['Total'] || r['Amount'] || 0);
   }, 0);
 
-  // Weekly Sales = MRR + non-autopay
-  const total_weekly_revenue = mrr + non_autopay_total;
+  // Put monthly recurring revenue and weekly non-autopay sales on a common time basis.
+  const weekly_mrr_equivalent = mrr * MONTHS_PER_YEAR / WEEKS_PER_YEAR;
+  const weekly_revenue_run_rate = weekly_mrr_equivalent + non_autopay_total;
+  const monthly_revenue_run_rate = mrr + non_autopay_total * WEEKS_PER_YEAR / MONTHS_PER_YEAR;
+  const annual_revenue_run_rate = mrr * MONTHS_PER_YEAR + non_autopay_total * WEEKS_PER_YEAR;
+  const recurring_revenue_pct = monthly_revenue_run_rate > 0
+    ? Math.round(mrr / monthly_revenue_run_rate * 100)
+    : 0;
 
   // Failed active-member payments
   const failed_payments = autopayRows
     .filter(r => {
       const item = (r['Item']||'').trim();
-      const status = (r['Status']||'').trim();
-      return memberProduct({ Item: item }) && status !== 'Success' && status !== '';
+      const status = normText(r['Status']);
+      return memberProduct({ Item: item }) && status && !isSuccessfulPaymentStatus(status);
     })
     .map(r => ({
       name: (r['Client']||'').trim(),
@@ -1990,56 +2103,61 @@ function aggregateData() {
       date: (r['Date']||'').trim(),
     }))
     .reduce((acc, f) => {
-      const existing = acc.find(x => x.name === f.name);
+      const key = normText(f.email) || normText(f.name) || normText(f.phone);
+      const existing = key && acc.find(x => (normText(x.email) || normText(x.name) || normText(x.phone)) === key);
       if (!existing) acc.push(f);
       return acc;
     }, []);
 
-  // New Prana/Prana Plus members this week
-  const first_visit_count = activeMemberRows.filter(r => {
-    const ms = r['Member Since'] || '';
-    try { return new Date(ms) >= weekStart; } catch { return false; }
-  }).length;
+  // New active members whose membership start date falls inside this Monday-Sunday week.
+  const newMemberRows = activeMemberRows.filter(r => isDateInRange(memberSinceValue(r), weekStart, weekEnd));
+  const new_member_count = newMemberRows.length;
 
   // Cancelled this week
   const cancelled_count = cancelRows.filter(r => {
     if (!isMemberProductRow(r)) return false;
-    const raw = (r['Cancellation Date'] || '').trim();
+    const raw = firstValue(r, ['Cancellation Date','Cancel Date','Cancelled Date']);
     const dateStr = raw.replace(/^Terminated from\s*/i, '').trim();
     if (!dateStr) return false;
     try {
-      const d = new Date(dateStr);
-      return !isNaN(d) && d >= weekStart && d <= weekEnd;
+      return isDateInRange(dateStr, weekStart, weekEnd);
     } catch { return false; }
   }).length;
 
-  const first_time_visitors = firstRows.length;
+  const first_time_visitors = firstRows.filter(r => {
+    const name = normText(firstValue(r, ['Client','Name','Client Name','First Name','First name']));
+    return name && !name.startsWith('total:') && !name.startsWith('total ');
+  }).length;
 
   // Active member health map
   const memberMap = {};
+  const memberProfiles = [];
   activeMemberRows.forEach(r => {
     const name = rowName(r);
     if (!name) return;
     const c30  = parseInt(r['Check Ins 30 Day']||'0') || 0;
     const cYTD = parseInt(r['Check Ins YTD']||'0') || 0;
-    const lv   = r['Last'] || '';
-    const freeze = (r['Freeze']||'') === 'Yes';
+    const lv   = firstValue(r, ['Last','Last Visit','Last Visit Date']);
+    const freeze = ['yes','true','1','frozen'].includes(normText(r['Freeze']));
     let daysAbsent = null;
-    try { const d = new Date(lv); if (!isNaN(d)) daysAbsent = Math.floor((weekEnd - d) / 86400000); } catch {}
+    const lastVisitDate = parseDashboardDate(lv);
+    if (lastVisitDate) daysAbsent = Math.max(0, Math.floor((weekEnd - lastVisitDate) / 86400000));
     let health = 'green';
     if (freeze) health = 'frozen';
     else if (c30 === 0 || daysAbsent >= 21) health = 'red';
     else if (c30 <= 2) health = 'amber';
     // FIX D: phone now resolved from 03_members_active.csv (Mobile) first.
-    memberMap[name.toLowerCase()] = {
+    const profile = {
       name, email: (r['Email']||'').trim(), phone: resolvePhone(r),
       membership: firstValue(r, ['Membership Type','Membership','Membership Tier','Plan','Product']) || memberProductLabel(memberProduct(r)),
-      member_since: r['Member Since']||'', checkins_30: c30, checkins_ytd: cYTD,
+      member_since: memberSinceValue(r), checkins_30: c30, checkins_ytd: cYTD,
       last_visit: lv, days_absent: daysAbsent, health, freeze,
     };
+    memberProfiles.push(profile);
+    if (!memberMap[name.toLowerCase()]) memberMap[name.toLowerCase()] = profile;
   });
 
-  const allF = Object.values(memberMap);
+  const allF = memberProfiles;
   const health_summary = {
     green:  allF.filter(f => f.health==='green').length,
     amber:  allF.filter(f => f.health==='amber').length,
@@ -2100,18 +2218,21 @@ function aggregateData() {
     });
 
   // FIX D: phone now resolved from 03_members_active.csv (Mobile) first.
-  const new_founder_members = activeMemberRows
-    .filter(r => { try { return new Date(r['Member Since']) >= weekStart; } catch { return false; } })
+  const new_members = newMemberRows
     .map(r => ({
       name: rowName(r),
       email: (r['Email']||'').trim(), phone: resolvePhone(r),
       membership: firstValue(r, ['Membership Type','Membership','Membership Tier','Plan','Product']) || memberProductLabel(memberProduct(r)),
-      member_since: r['Member Since']||'',
+      member_since: memberSinceValue(r),
       visits_so_far: parseInt(r['Check Ins YTD']||'0')||0,
     }));
 
   const cancelled_members = cancelRows
-    .filter(r => isMemberProductRow(r))
+    .filter(r => {
+      if (!isMemberProductRow(r)) return false;
+      const raw = firstValue(r, ['Cancellation Date','Cancel Date','Cancelled Date']).replace(/^Terminated from\s*/i,'').trim();
+      return isDateInRange(raw, weekStart, weekEnd);
+    })
     .map(r => {
       const name   = (r['Name']||'').trim();
       const enrich = memberMap[name.toLowerCase()] || {};
@@ -2128,7 +2249,7 @@ function aggregateData() {
     });
 
   const memberIds = new Set(
-    activeMemberRows.map(r => (r['ID']||'').trim()).filter(Boolean)
+    activeMemberRows.map(r => String(memberIdValue(r)||'').trim()).filter(Boolean)
   );
 
   const classMap   = {};
@@ -2141,7 +2262,8 @@ function aggregateData() {
   let member_visits_total = 0;
 
   attendRows.forEach(r => {
-    const className  = (r['Description']||'Unknown').trim();
+    const className  = (r['Description']||'').trim();
+    if (!className || /^total\b/i.test(className)) return;
     const status     = (r['Status']||'').toLowerCase();
     const clientId   = (r['Client ID']||'').trim();
     const isMember  = memberIds.has(clientId);
@@ -2156,10 +2278,8 @@ function aggregateData() {
     }
 
     let dayName = '';
-    try {
-      const d = new Date(dateStr);
-      if (!isNaN(d)) dayName = days[d.getDay()];
-    } catch {}
+    const classDate = parseDashboardDate(dateStr);
+    if (classDate) dayName = days[classDate.getDay()];
 
     const sessionKey = className + '|' + dateStr + '|' + startTime;
     sessionsSeen.add(sessionKey);
@@ -2181,9 +2301,11 @@ function aggregateData() {
       if (startTime)  classMap[className].times[startTime]        = (classMap[className].times[startTime]||0)+1;
       if (dayName)    classMap[className].days[dayName]            = (classMap[className].days[dayName]||0)+1;
 
-      if (!instrMap[instructor]) instrMap[instructor] = {name:instructor, visits:0, classes_taught:new Set()};
-      instrMap[instructor].visits += 1;
-      instrMap[instructor].classes_taught.add(sessionKey);
+      if (instructor) {
+        if (!instrMap[instructor]) instrMap[instructor] = {name:instructor, visits:0, classes_taught:new Set()};
+        instrMap[instructor].visits += 1;
+        instrMap[instructor].classes_taught.add(sessionKey);
+      }
 
       if (startTime) timeMap[startTime] = (timeMap[startTime]||0)+1;
       if (dayName)   dayMap[dayName]    = (dayMap[dayName]||0)+1;
@@ -2230,17 +2352,31 @@ function aggregateData() {
   const peak_days  = Object.entries(dayMap).sort((a,b)=>b[1]-a[1])
     .map(([day,visits]) => ({day, visits}));
 
-  const avg_founder_visits = active_count > 0
+  const avg_member_visits = active_count > 0
     ? Math.round(member_visits_total/active_count*10)/10 : 0;
 
   const founder_classes = [...class_data]
     .filter(c => (c.member_visits ?? c.founder_visits) > 0)
     .sort((a,b) => (b.member_pct ?? b.founder_pct) - (a.member_pct ?? a.founder_pct));
 
-  const no_show_count = noRevRows.filter(r =>
+  const noRevenueExceptions = noRevRows.filter(r =>
     (r['Status']||'').toLowerCase().includes('no show') ||
     (r['Status']||'').toLowerCase().includes('late cancel')
-  ).length || late_cancel_count;
+  ).length;
+  const no_show_count = noRevenueExceptions || late_cancel_count;
+  const total_bookings = total_visits + no_show_count;
+  const no_show_rate_pct = total_bookings > 0
+    ? Math.round(no_show_count / total_bookings * 1000) / 10
+    : 0;
+
+  const data_quality = {
+    counted_members: active_count,
+    product_count_total: Object.values(member_product_counts).reduce((sum, count) => sum + count, 0),
+    duplicates_merged: memberMergeStats.duplicatesMerged,
+    rows_without_identity: memberMergeStats.rowsWithoutIdentity,
+    unknown_product_labels: unknownProductLabels,
+    members_missing_start_date: activeMemberRows.filter(r => !parseDashboardDate(memberSinceValue(r))).length,
+  };
 
   return {
     week_of: weekOf,
@@ -2248,28 +2384,42 @@ function aggregateData() {
     non_autopay_total:    Math.round(non_autopay_total),
     autopay_total:        mrr,
     mrr:                  mrr,
-    total_weekly_revenue: Math.round(total_weekly_revenue),
+    weekly_mrr_equivalent: Math.round(weekly_mrr_equivalent),
+    weekly_revenue_run_rate: Math.round(weekly_revenue_run_rate),
+    monthly_revenue_run_rate: Math.round(monthly_revenue_run_rate),
+    annual_revenue_run_rate: Math.round(annual_revenue_run_rate),
+    recurring_revenue_pct,
+    total_weekly_revenue: Math.round(weekly_revenue_run_rate),
     active_count,
     cancelled_count,
-    first_visit_count,
+    new_member_count,
+    first_visit_count: new_member_count,
     first_time_visitors,
     no_show_count,
+    no_show_rate_pct,
+    total_bookings,
+    total_visits,
     total_sessions,
     avg_per_session,
     failed_payments,
     no_return_members,
-    new_founder_members,
+    new_members,
+    new_founder_members: new_members,
     cancelled_members,
     class_data,
     class_schedule,
     health_summary,
     member_product_counts,
-    avg_founder_visits,
+    member_product_mrr,
+    avg_member_visits,
+    avg_founder_visits: avg_member_visits,
     founder_classes,
+    member_classes: founder_classes,
     instructor_data,
     peak_times,
     peak_days,
     browser_dorian,
+    data_quality,
   };
 }
 
@@ -2296,7 +2446,7 @@ async function processFiles() {
         net_growth:    w.membership?.net_growth || 0,
         mrr:           w.revenue?.mrr || 0,
         member_product_counts: w.member_product_counts || {},
-        avg_visits:    w.avg_founder_visits || 0,
+        avg_visits:    w.avg_member_visits ?? w.avg_founder_visits ?? 0,
         health:        w.health_summary || {},
         scheduled_classes: w.class_schedule?.length || 0,
       }));
@@ -2316,12 +2466,16 @@ async function processFiles() {
     // Browser is source of truth — override Claude's computed values
     current.health_summary      = browserData.health_summary;
     current.member_product_counts = browserData.member_product_counts;
+    current.member_product_mrr  = browserData.member_product_mrr;
+    current.avg_member_visits   = browserData.avg_member_visits;
     current.avg_founder_visits  = browserData.avg_founder_visits;
+    current.member_classes      = browserData.member_classes;
     current.founder_classes     = browserData.founder_classes;
     current.instructor_data     = browserData.instructor_data;
     current.peak_times          = browserData.peak_times;
     current.peak_days           = browserData.peak_days;
-    current.new_founder_members = browserData.new_founder_members;
+    current.new_members         = browserData.new_members;
+    current.new_founder_members = browserData.new_members;
     current.first_time_visitors = browserData.first_time_visitors;
     current.class_data          = browserData.class_data;
     current.class_schedule      = browserData.class_schedule;
@@ -2329,15 +2483,19 @@ async function processFiles() {
     current.failed_payments     = browserData.failed_payments;
     current.total_sessions      = browserData.total_sessions;
     current.avg_per_session     = browserData.avg_per_session;
+    current.data_quality        = browserData.data_quality;
 
     current.revenue = current.revenue || {};
     current.revenue.mrr = browserData.mrr;
     current.revenue.pack_and_class = Math.round(browserData.non_autopay_total);
-    current.revenue.total_weekly = Math.round(browserData.total_weekly_revenue);
-    current.revenue.mrr_pct = browserData.total_weekly_revenue > 0
-      ? Math.round(browserData.mrr / browserData.total_weekly_revenue * 100) : 0;
+    current.revenue.weekly_mrr_equivalent = browserData.weekly_mrr_equivalent;
+    current.revenue.total_weekly = browserData.weekly_revenue_run_rate;
+    current.revenue.weekly_revenue_run_rate = browserData.weekly_revenue_run_rate;
+    current.revenue.monthly_revenue_run_rate = browserData.monthly_revenue_run_rate;
+    current.revenue.annual_revenue_run_rate = browserData.annual_revenue_run_rate;
+    current.revenue.mrr_pct = browserData.recurring_revenue_pct;
     current.revenue.revenue_per_member = browserData.active_count > 0
-      ? Math.round(browserData.total_weekly_revenue / browserData.active_count) : 0;
+      ? Math.round(browserData.monthly_revenue_run_rate / browserData.active_count) : 0;
     current.revenue.arr_at_risk = (browserData.failed_payments || [])
       .reduce((s,p) => {
         const amount = parseMoney(p.monthly_amount || p.amount);
@@ -2347,15 +2505,26 @@ async function processFiles() {
 
     current.membership = current.membership || {};
     current.membership.active_count = browserData.active_count;
-    current.membership.new_this_week = browserData.first_visit_count;
+    current.membership.new_this_week = browserData.new_member_count;
     current.membership.churned_this_week = browserData.cancelled_count;
-    const membershipFlowNet = browserData.first_visit_count - browserData.cancelled_count;
+    const membershipFlowNet = browserData.new_member_count - browserData.cancelled_count;
     current.membership.net_growth = membershipFlowNet;
     current.membership.other_status_changes = 0;
-    current.membership.churn_rate_pct = browserData.active_count > 0
-      ? Math.round(browserData.cancelled_count / browserData.active_count * 1000) / 10 : 0;
     current.membership.progress_to_800_pct = Math.round(browserData.active_count / 800 * 100);
     current.membership.failed_payment_count = browserData.failed_payments?.length || 0;
+
+    current.attendance = current.attendance || {};
+    current.attendance.total_visits = browserData.total_visits;
+    current.attendance.total_sessions = browserData.total_sessions;
+    current.attendance.avg_per_session = browserData.avg_per_session;
+    current.attendance.no_show_count = browserData.no_show_count;
+    current.attendance.total_bookings = browserData.total_bookings;
+    current.attendance.no_show_rate_pct = browserData.no_show_rate_pct;
+    current.attendance.top_classes = [...browserData.class_data].slice(0, 3);
+    current.attendance.bottom_classes = [...browserData.class_data]
+      .filter(row => row.visits > 0)
+      .sort((a,b) => a.visits - b.visits)
+      .slice(0, 3);
 
     // Net Growth is the actual active member headcount movement.
     // New-minus-churn remains an operating flow detail; any remainder is status movement
@@ -2364,9 +2533,14 @@ async function processFiles() {
       ? current.warnings.filter(w => !/net growth mismatch|new minus churned/i.test(String(w)))
       : [];
     const prevForRecon = state.allWeeksData
-      .filter(w => w.week_of !== current.week_of && w.baseline_corrected === true)
+      .filter(w => w.week_of < current.week_of && w.baseline_corrected === true)
       .sort((a,b) => a.week_of > b.week_of ? 1 : -1)
       .slice(-1)[0];
+    const churnDenominator = prevForRecon?.membership?.active_count || browserData.active_count;
+    current.membership.churn_rate_pct = churnDenominator > 0
+      ? Math.round(browserData.cancelled_count / churnDenominator * 1000) / 10
+      : 0;
+    current.membership.retention_rate_pct = Math.max(0, Math.round((100 - current.membership.churn_rate_pct) * 10) / 10);
     if (prevForRecon) {
       const headcountDelta = current.membership.active_count - (prevForRecon.membership?.active_count || 0);
       current.membership.net_growth = headcountDelta;
@@ -2428,7 +2602,7 @@ function renderTrends() {
     ? (churnByWeek[churnByWeek.length-1] > churnByWeek[churnByWeek.length-2] ? 'up' : churnByWeek[churnByWeek.length-1] < churnByWeek[churnByWeek.length-2] ? 'down' : 'flat')
     : 'flat';
 
-  const visitsByWeek = sorted.map(w => w.avg_founder_visits || 0);
+  const visitsByWeek = sorted.map(w => w.avg_member_visits ?? w.avg_founder_visits ?? 0);
   const visitsTrend = visitsByWeek.length >= 2
     ? (visitsByWeek[visitsByWeek.length-1] > visitsByWeek[visitsByWeek.length-2] ? 'up' : visitsByWeek[visitsByWeek.length-1] < visitsByWeek[visitsByWeek.length-2] ? 'down' : 'flat')
     : 'flat';
@@ -2567,7 +2741,7 @@ function renderTrends() {
                 '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:' + ((w.membership?.churned_this_week||0)>0?'var(--red)':'var(--ink-3)') + '">' + (w.membership?.churned_this_week||0) + '</td>' +
                 '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:' + (net>0?'var(--green)':net<0?'var(--red)':'var(--ink-3)') + '">' + (net>0?'+':'') + net + '</td>' +
                 '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:var(--green)">' + fmtC(w.revenue?.mrr||0) + '</td>' +
-                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:' + ((w.avg_founder_visits||0)>=3?'var(--green)':'var(--amber)') + '">' + (w.avg_founder_visits||0) + '/wk</td>' +
+                '<td style="padding:9px 10px;text-align:right;font-family:var(--mono);font-size:12px;color:' + ((w.avg_member_visits ?? w.avg_founder_visits ?? 0)>=3?'var(--green)':'var(--amber)') + '">' + (w.avg_member_visits ?? w.avg_founder_visits ?? 0) + '/wk</td>' +
               '</tr>';
             }).join('')}
           </tbody>
