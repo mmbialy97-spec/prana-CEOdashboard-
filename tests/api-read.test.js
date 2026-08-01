@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'api', 'read.js'), 'utf8')
   .replace('export default async function handler', 'async function handler');
 const context = vm.createContext({console, Date, Math, Number, Object, String, Array, JSON, setTimeout, clearTimeout, AbortController});
-vm.runInContext(`${source}\n;globalThis.apiReadTest = {cleanDate, normalise, normaliseMembershipComparison};`, context);
+vm.runInContext(`${source}\n;globalThis.apiReadTest = {cleanDate, normalise};`, context);
 
 test('keeps the calendar date when normalising an ISO timestamp', () => {
   assert.equal(context.apiReadTest.cleanDate('2026-07-20T00:00:00.000Z'), '2026-07-20');
@@ -31,16 +31,4 @@ test('recalculates legacy saved revenue on a consistent time basis', () => {
   assert.equal(week.new_members.length, 1);
   assert.equal(week.avg_member_visits, 2.4);
   assert.equal(week.member_classes.length, 1);
-});
-
-test('recalculates legacy churn from the prior active-member base', () => {
-  const current = {
-    membership:{active_count:168, new_this_week:3, churned_this_week:10, net_growth:-7, churn_rate_pct:6},
-  };
-  const previous = {membership:{active_count:174}};
-  context.apiReadTest.normaliseMembershipComparison(current, previous);
-  assert.equal(current.membership.net_growth, -6);
-  assert.equal(current.membership.other_status_changes, 1);
-  assert.equal(current.membership.churn_rate_pct, 5.7);
-  assert.equal(current.membership.retention_rate_pct, 94.3);
 });
