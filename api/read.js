@@ -29,6 +29,7 @@ export default async function handler(req, res) {
     }
     if (data.current)  data.current  = normalise(data.current);
     if (data.previous) data.previous = normalise(data.previous);
+    if (data.current && data.previous) normaliseMembershipComparison(data.current, data.previous);
     if (data.weeks) {
       data.weeks = data.weeks
         .map(w => ({ ...w, week_of: cleanDate(w.week_of) }))
@@ -38,6 +39,21 @@ export default async function handler(req, res) {
   } catch (err) {
     return res.status(200).json({ ok: false, error: err.message || 'fetch failed' });
   }
+}
+
+function normaliseMembershipComparison(current, previous) {
+  const membership = current.membership || {};
+  const previousActive = Number(previous.membership?.active_count || 0);
+  const currentActive = Number(membership.active_count || 0);
+  const newMembers = Number(membership.new_this_week || 0);
+  const churned = Number(membership.churned_this_week || 0);
+  if (previousActive <= 0) return current;
+  membership.net_growth = currentActive - previousActive;
+  membership.other_status_changes = membership.net_growth - (newMembers - churned);
+  membership.churn_rate_pct = Math.round(churned / previousActive * 1000) / 10;
+  membership.retention_rate_pct = Math.max(0, Math.round((100 - membership.churn_rate_pct) * 10) / 10);
+  current.membership = membership;
+  return current;
 }
 
 function cleanDate(d) {

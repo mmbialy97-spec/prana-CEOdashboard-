@@ -663,6 +663,10 @@ function renderDashboard() {
     const flowNet = (m.new_this_week || 0) - (m.churned_this_week || 0);
     m.net_growth = headcountDelta;
     m.other_status_changes = headcountDelta - flowNet;
+    m.churn_rate_pct = previousActiveCount > 0
+      ? Math.round((m.churned_this_week || 0) / previousActiveCount * 1000) / 10
+      : 0;
+    m.retention_rate_pct = Math.max(0, Math.round((100 - m.churn_rate_pct) * 10) / 10);
   }
 
   const wow = (curr, prev, isC) => {
