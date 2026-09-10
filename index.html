@@ -517,11 +517,58 @@ function parseMoney(value) {
 function memberProductFromText(value) {
   const text = normProductText(value);
   if (!text) return null;
-  const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => text.includes(alias)));
+  const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => productAliasMatches(text, alias)));
   return product ? product.key : null;
 }
 function memberProductPrice(key) {
   return MEMBER_PRODUCTS.find(p => p.key === key)?.price || DEFAULT_MEMBER_PRICE;
+}
+function productAliasMatches(text, alias) {
+  const cleanAlias = normProductText(alias);
+  if (!text || !cleanAlias) return false;
+  if (text === cleanAlias) return true;
+  if (cleanAlias === 'prana') return false;
+  return text.includes(cleanAlias);
+}
+function parseDateFlexible(value) {
+  const raw = String(value || '').trim().replace(/^Terminated (?:from|on)\s*/i, '').trim();
+  if (!raw) return null;
+  const mdy = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:\s|$)/);
+  if (mdy) {
+    const month = Number(mdy[1]);
+    const day = Number(mdy[2]);
+    let year = Number(mdy[3]);
+    if (year < 100) year += 2000;
+    const d = new Date(year, month - 1, day);
+    return isNaN(d) ? null : d;
+  }
+  const d = new Date(raw);
+  return isNaN(d) ? null : d;
+}
+function dateFallsInWeek(value, weekStart, weekEnd) {
+  const d = parseDateFlexible(value);
+  return Boolean(d && d >= weekStart && d <= weekEnd);
+}
+function reconcileMembershipSeries(weeks) {
+  const sorted = [...(weeks || [])].sort((a,b) => a.week_of > b.week_of ? 1 : -1);
+  sorted.forEach((week, index) => {
+    if (!week?.membership) return;
+    const activeCount = Number(week.membership.active_count);
+    if (!Number.isFinite(activeCount)) return;
+    const joined = Number(week.membership.new_this_week || 0);
+    const churned = Number(week.membership.churned_this_week || 0);
+    const flowNet = joined - churned;
+    const previousActive = index > 0 ? Number(sorted[index - 1]?.membership?.active_count) : NaN;
+    if (Number.isFinite(previousActive)) {
+      const headcountDelta = activeCount - previousActive;
+      week.membership.net_growth = headcountDelta;
+      week.membership.other_status_changes = headcountDelta - flowNet;
+    } else if (!Number.isFinite(Number(week.membership.net_growth))) {
+      week.membership.net_growth = flowNet;
+      week.membership.other_status_changes = 0;
+    }
+  });
+  return sorted;
 }
 function renderChatMessage(msg) {
   if (msg.role === 'user') {
@@ -572,8 +619,9 @@ function renderDashboard() {
   const founderCount = productCount('Founder', 'founder') || (!hasProductCounts ? (m.active_count || 0) : 0);
   const pranaCount = productCount('Prana', 'prana');
   const pranaPlusCount = productCount('Prana Plus', 'prana_plus');
+  const unclassifiedCount = Math.max((m.active_count || 0) - founderCount - pranaCount - pranaPlusCount, 0);
   const productSplitSub = hasProductCounts
-    ? `${founderCount} Founder · ${pranaCount} Prana · ${pranaPlusCount} Prana Plus`
+    ? `${founderCount} Founder · ${pranaCount} Prana · ${pranaPlusCount} Prana Plus${unclassifiedCount ? ` · ${unclassifiedCount} unclassified` : ''}`
     : `${m.active_count || 0} Founder · legacy week`;
 
   const newFounders   = c.new_founder_members || [];
@@ -586,15 +634,6 @@ function renderDashboard() {
   const currentCorrected  = c.baseline_corrected === true;
   const previousCorrected = p?.baseline_corrected === true;
   const canCompareWoW = !p ? false : (!currentCorrected || previousCorrected);
-  const currentActiveCount = Number(m.active_count);
-  const previousActiveCount = Number(p?.membership?.active_count);
-  if (canCompareWoW && Number.isFinite(currentActiveCount) && Number.isFinite(previousActiveCount)) {
-    const headcountDelta = currentActiveCount - previousActiveCount;
-    const flowNet = (m.new_this_week || 0) - (m.churned_this_week || 0);
-    m.net_growth = headcountDelta;
-    m.other_status_changes = headcountDelta - flowNet;
-  }
-
   const wow = (curr, prev, isC) => {
     if (!canCompareWoW || prev == null) return '';
     const diff = curr - prev;
@@ -1649,14 +1688,20 @@ async function processRawFiles(rawFiles) {
 }
 
 function resolveUploadKey(rawKey) {
-  const clean = String(rawKey || '').trim();
-  const lower = clean.toLowerCase().replace(/\s+/g, '_');
+  const normaliseUploadName = value => String(value || '')
+    .trim()
+    .replace(/\.csv$/i, '')
+    .replace(/\s*\(\d+\)\s*$/,'')
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+    .replace(/_+/g, '_');
+  const lower = normaliseUploadName(rawKey);
   const required = EXPECTED.find(e =>
-    e.key.toLowerCase() === lower || (e.aliases || []).some(alias => alias.toLowerCase().replace(/\s+/g,'_') === lower)
+    normaliseUploadName(e.key) === lower || (e.aliases || []).some(alias => normaliseUploadName(alias) === lower)
   );
   if (required) return required.key;
   const optional = OPTIONAL.find(e =>
-    e.key.toLowerCase() === lower || (e.aliases || []).some(alias => alias.toLowerCase() === lower)
+    normaliseUploadName(e.key) === lower || (e.aliases || []).some(alias => normaliseUploadName(alias) === lower)
   );
   return optional ? optional.key : null;
 }
@@ -1698,6 +1743,10 @@ function aggregateData() {
   function looksLikeClientId(value) {
     return /^\d+(?:\.\d+e\+\d+)?$/i.test(String(value || '').trim());
   }
+  function isSafeMemberId(value) {
+    const id = String(value || '').trim();
+    return Boolean(id && !/[eE]\+/.test(id));
+  }
   function hasSwappedActiveNameColumns(row) {
     return looksLikeClientId(row['First name']) && !looksLikeClientId(row['ID']) && Boolean(row['Last name']);
   }
@@ -1724,7 +1773,7 @@ function aggregateData() {
       'Item','Item name','Item Name','Service','Service Name'
     ]));
     if (!type) return null;
-    const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => type.includes(alias)));
+    const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => productAliasMatches(type, alias)));
     return product ? product.key : null;
   }
   function memberProductLabel(key) {
@@ -1736,12 +1785,12 @@ function aggregateData() {
   function memberProductFromText(value) {
     const text = normText(value);
     if (!text) return null;
-    const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => text.includes(alias)));
+    const product = MEMBER_PRODUCTS.find(p => p.aliases.some(alias => productAliasMatches(text, alias)));
     return product ? product.key : null;
   }
   function isActiveMemberRow(row, assumeActive) {
     const product = memberProduct(row);
-    if (!product) return false;
+    if (!product && !(assumeActive && !rowHasMembershipField(row))) return false;
     const status = normText(firstValue(row, ['Status','Member Status','Subscription Status']));
     return assumeActive || !status || ['active','current','paid','enabled'].includes(status);
   }
@@ -1768,7 +1817,7 @@ function aggregateData() {
     const email = normText(firstValue(row, ['Email','Email Address','Email Address ']));
     if (email) keys.push('email:' + email);
     const id = memberIdValue(row);
-    if (id) keys.push('id:' + id);
+    if (isSafeMemberId(id)) keys.push('id:' + id);
     const name = normText(rowName(row));
     if (name) keys.push('name:' + name);
     const phone = normText(firstValue(row, ['Mobile phone','Mobile Phone','Phone','Home phone','Home Phone']));
@@ -1844,7 +1893,9 @@ function aggregateData() {
     if (!str) return null;
     const p = str.trim().split('/');
     if (p.length !== 3) return null;
-    const m = parseInt(p[0]), d = parseInt(p[1]), y = parseInt(p[2]);
+    const m = parseInt(p[0]), d = parseInt(p[1]);
+    let y = parseInt(p[2]);
+    if (y > 0 && y < 100) y += 2000;
     if (!m || !d || !y) return null;
     return { y, m, d };
   }
@@ -1872,8 +1923,9 @@ function aggregateData() {
   // Mindbody appends a literal summary row with Name="Total: 11" and empty fields.
   // It pollutes downstream count/parse logic if not removed.
   const cancelRows = get('04_members_cancelled').filter(r => {
-    const name = String(r['Name']||'').trim().toLowerCase();
-    return name && !name.startsWith('total:') && !name.startsWith('total ');
+    const name = (String(r['Name'] || '').trim() || rowName(r)).toLowerCase();
+    const hasValues = Object.values(r || {}).some(v => String(v || '').trim());
+    return hasValues && !name.startsWith('total:') && !name.startsWith('total ');
   });
 
   const firstRows    = get('05_first_visit');
@@ -1997,20 +2049,15 @@ function aggregateData() {
 
   // New Prana/Prana Plus members this week
   const first_visit_count = activeMemberRows.filter(r => {
-    const ms = r['Member Since'] || '';
-    try { return new Date(ms) >= weekStart; } catch { return false; }
+    const ms = firstValue(r, ['Member Since','Start Date','Start date','Join Date','Joined Date']);
+    return dateFallsInWeek(ms, weekStart, weekEnd);
   }).length;
 
   // Cancelled this week
   const cancelled_count = cancelRows.filter(r => {
     if (!isMemberProductRow(r)) return false;
-    const raw = (r['Cancellation Date'] || '').trim();
-    const dateStr = raw.replace(/^Terminated from\s*/i, '').trim();
-    if (!dateStr) return false;
-    try {
-      const d = new Date(dateStr);
-      return !isNaN(d) && d >= weekStart && d <= weekEnd;
-    } catch { return false; }
+    const dateStr = firstValue(r, ['Cancellation Date','Cancelled Date','Cancel Date','Termination Date','End Date']);
+    return dateFallsInWeek(dateStr, weekStart, weekEnd);
   }).length;
 
   const first_time_visitors = firstRows.length;
@@ -2101,7 +2148,7 @@ function aggregateData() {
 
   // FIX D: phone now resolved from 03_members_active.csv (Mobile) first.
   const new_founder_members = activeMemberRows
-    .filter(r => { try { return new Date(r['Member Since']) >= weekStart; } catch { return false; } })
+    .filter(r => dateFallsInWeek(firstValue(r, ['Member Since','Start Date','Start date','Join Date','Joined Date']), weekStart, weekEnd))
     .map(r => ({
       name: rowName(r),
       email: (r['Email']||'').trim(), phone: resolvePhone(r),
@@ -2111,12 +2158,16 @@ function aggregateData() {
     }));
 
   const cancelled_members = cancelRows
-    .filter(r => isMemberProductRow(r))
+    .filter(r => {
+      if (!isMemberProductRow(r)) return false;
+      const dateStr = firstValue(r, ['Cancellation Date','Cancelled Date','Cancel Date','Termination Date','End Date']);
+      return dateFallsInWeek(dateStr, weekStart, weekEnd);
+    })
     .map(r => {
-      const name   = (r['Name']||'').trim();
+      const name   = (String(r['Name']||'').trim() || rowName(r));
       const enrich = memberMap[name.toLowerCase()] || {};
       const cYTD   = enrich.checkins_ytd||0;
-      const cancelDateRaw = (r['Cancellation Date']||'').replace(/^Terminated from\s*/i,'').trim();
+      const cancelDateRaw = firstValue(r, ['Cancellation Date','Cancelled Date','Cancel Date','Termination Date','End Date']).replace(/^Terminated from\s*/i,'').trim();
       return {
         name, email: (r['Email Address ']||r['Email']||'').trim(),
         phone: (r['Phone Number']||r['Phone']||'').trim(),
@@ -2364,7 +2415,7 @@ async function processFiles() {
       ? current.warnings.filter(w => !/net growth mismatch|new minus churned/i.test(String(w)))
       : [];
     const prevForRecon = state.allWeeksData
-      .filter(w => w.week_of !== current.week_of && w.baseline_corrected === true)
+      .filter(w => w.week_of !== current.week_of)
       .sort((a,b) => a.week_of > b.week_of ? 1 : -1)
       .slice(-1)[0];
     if (prevForRecon) {
@@ -2384,7 +2435,7 @@ async function processFiles() {
 
     state.allWeeksData = state.allWeeksData.filter(w => w.week_of !== current.week_of);
     state.allWeeksData.push(current);
-    state.allWeeksData.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
+    state.allWeeksData = reconcileMembershipSeries(state.allWeeksData);
     state.weeks        = state.allWeeksData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
     state.selectedWeek = current.week_of;
     const newIdx       = state.allWeeksData.findIndex(w => w.week_of === current.week_of);
@@ -2610,10 +2661,10 @@ async function init() {
       return;
     }
 
-    const allData0 = [];
+    let allData0 = [];
     if (latestResult.previous) allData0.push(latestResult.previous);
     allData0.push(latestResult.current);
-    allData0.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
+    allData0 = reconcileMembershipSeries(allData0);
     const latest  = allData0[allData0.length - 1];
     const prevOne = allData0.length > 1 ? allData0[allData0.length - 2] : null;
 
@@ -2635,22 +2686,19 @@ async function init() {
         } catch {}
       }
       if (allData.length && !state.freshUpload) {
-        allData.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
-        state.allWeeksData = allData;
-        state.weeks        = allData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
-        const trueLatest = allData[allData.length - 1];
-        const trueIdx    = allData.length - 1;
-        state.dashData   = { current: trueLatest, previous: trueIdx > 0 ? allData[trueIdx-1] : null };
+        state.allWeeksData = reconcileMembershipSeries(allData);
+        state.weeks        = state.allWeeksData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
+        const trueLatest = state.allWeeksData[state.allWeeksData.length - 1];
+        const trueIdx    = state.allWeeksData.length - 1;
+        state.dashData   = { current: trueLatest, previous: trueIdx > 0 ? state.allWeeksData[trueIdx-1] : null };
         state.selectedWeek = trueLatest.week_of;
         render();
       } else if (allData.length && state.freshUpload) {
-        allData.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
         const freshWeek = state.dashData?.current?.week_of;
         const merged = allData.map(w => w.week_of === freshWeek ? state.dashData.current : w);
         if (!merged.find(w => w.week_of === freshWeek)) merged.push(state.dashData.current);
-        merged.sort((a,b) => a.week_of > b.week_of ? 1 : -1);
-        state.allWeeksData = merged;
-        state.weeks        = merged.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
+        state.allWeeksData = reconcileMembershipSeries(merged);
+        state.weeks        = state.allWeeksData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
       }
     } catch {}
 
