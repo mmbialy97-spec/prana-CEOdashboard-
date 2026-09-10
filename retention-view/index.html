@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <title>Prana Retention</title>
+  <meta name="description" content="Prana member retention follow-up list">
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box}
+    :root{
+      --bg:#f6f5f2;--surface:#fff;--surface-2:#efede8;--line:#ddd9d1;
+      --ink:#1e2521;--muted:#626963;--quiet:#686f69;--green:#286246;
+      --green-soft:#e8f2eb;--amber:#a76613;--amber-soft:#fff3df;
+      --red:#a63c3c;--red-soft:#fbeaea;--blue:#35617a;--blue-soft:#e8f1f5;
+      --font:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      --serif:Iowan Old Style,Baskerville,"Times New Roman",serif;
+      --shadow:0 1px 2px rgba(24,34,28,.05),0 8px 24px rgba(24,34,28,.05)
+    }
+    *{margin:0;padding:0}
+    html{-webkit-font-smoothing:antialiased}
+    body{min-height:100vh;background:var(--bg);color:var(--ink);font-family:var(--font)}
+    button,input,select{font:inherit}
+    button,a,select{touch-action:manipulation}
+    button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid rgba(40,98,70,.22);outline-offset:2px}
+    .shell{width:min(1120px,calc(100% - 32px));margin:0 auto;padding:28px 0 72px}
+    .topbar{display:flex;align-items:center;gap:14px;padding-bottom:22px;border-bottom:1px solid var(--line)}
+    .logo{width:40px;height:40px;display:grid;place-items:center;background:var(--green);color:#fff;border-radius:8px;font-family:var(--serif);font-size:21px;flex:0 0 auto}
+    .brand{min-width:0}
+    .brand h1{font-family:var(--serif);font-size:22px;font-weight:600;line-height:1.1;letter-spacing:0}
+    .brand p{margin-top:3px;color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+    .week-control{display:flex;align-items:center;gap:8px;margin-left:auto}
+    .week-control label{font-size:12px;color:var(--muted);font-weight:600}
+    select,.search{height:40px;background:var(--surface);border:1px solid var(--line);border-radius:8px;color:var(--ink)}
+    select{min-width:164px;padding:0 34px 0 12px;cursor:pointer}
+    .hero{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:34px 0 24px}
+    .eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--green);margin-bottom:8px}
+    .hero h2{font-family:var(--serif);font-weight:500;font-size:34px;line-height:1.1;letter-spacing:0}
+    .hero p{font-size:14px;color:var(--muted);margin-top:8px}
+    .actions{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+    .btn{height:40px;border-radius:8px;padding:0 14px;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:700;cursor:pointer;background:var(--surface);color:var(--ink)}
+    .btn:hover{border-color:#b9bdb8;background:#fafafa}
+    .btn-primary{background:var(--green);border-color:var(--green);color:#fff}
+    .btn-primary:hover{background:#1f5139;border-color:#1f5139}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .icon{width:17px;height:17px;stroke-width:2}
+    .summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:24px}
+    .metric{min-height:108px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:17px 18px;box-shadow:var(--shadow)}
+    .metric-label{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+    .metric-value{font-family:var(--serif);font-size:32px;line-height:1;margin-top:16px;font-variant-numeric:tabular-nums}
+    .metric-risk .metric-value{color:var(--amber)}
+    .metric-urgent .metric-value{color:var(--red)}
+    .metric-new .metric-value{color:var(--green)}
+    .toolbar{display:flex;align-items:center;gap:12px;padding:14px 0 20px;border-top:1px solid var(--line)}
+    .search-wrap{position:relative;flex:1;max-width:390px}
+    .search-wrap .icon{position:absolute;left:12px;top:11px;color:var(--quiet);pointer-events:none}
+    .search{width:100%;padding:0 12px 0 38px}
+    .search::placeholder{color:var(--quiet)}
+    .result-count{margin-left:auto;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+    .section{margin-top:25px}
+    .section-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .section-icon{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;flex:0 0 auto}
+    .section-icon .icon{width:16px;height:16px}
+    .section-risk .section-icon{background:var(--amber-soft);color:var(--amber)}
+    .section-urgent .section-icon{background:var(--red-soft);color:var(--red)}
+    .section-new .section-icon{background:var(--green-soft);color:var(--green)}
+    .section-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.07em}
+    .section-count{margin-left:auto;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+    .member-list{display:flex;flex-direction:column;gap:7px}
+    .member{display:grid;grid-template-columns:minmax(190px,1fr) minmax(190px,1fr) minmax(220px,1.2fr);gap:18px;align-items:center;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line);border-radius:8px;padding:14px 16px;box-shadow:0 1px 2px rgba(24,34,28,.03)}
+    .section-risk .member{border-left-color:var(--amber)}
+    .section-urgent .member{border-left-color:var(--red)}
+    .section-new .member{border-left-color:var(--green)}
+    .member-name{font-size:14px;font-weight:750;overflow-wrap:anywhere}
+    .membership{font-size:11px;color:var(--muted);margin-top:4px}
+    .contact{display:flex;flex-direction:column;gap:5px;min-width:0}
+    .contact a{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px;text-decoration:none;min-width:0;overflow-wrap:anywhere}
+    .contact a:hover{color:var(--green);text-decoration:underline}
+    .contact .icon{width:14px;height:14px;flex:0 0 auto}
+    .follow-up{background:var(--surface-2);border-radius:7px;padding:10px 11px;color:#4f554f;font-size:12px;line-height:1.45}
+    .follow-up strong{color:var(--ink)}
+    .member-meta{display:flex;flex-wrap:wrap;gap:5px 12px;margin-top:7px;color:var(--quiet);font-size:11px}
+    .empty-section{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:15px 16px;color:var(--muted);font-size:13px}
+    .status{min-height:420px;display:grid;place-items:center;text-align:center;color:var(--muted)}
+    .status-inner{max-width:360px}
+    .status-icon{width:44px;height:44px;border-radius:8px;background:var(--green-soft);color:var(--green);display:grid;place-items:center;margin:0 auto 14px}
+    .status-icon .icon{width:22px;height:22px}
+    .spin{animation:spin .9s linear infinite}
+    .status h2{font-family:var(--serif);font-size:23px;color:var(--ink);font-weight:500}
+    .status p{font-size:13px;line-height:1.6;margin:7px 0 16px}
+    .hidden{display:none!important}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media(max-width:820px){
+      .summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .member{grid-template-columns:minmax(180px,.8fr) minmax(220px,1fr)}
+      .follow-up{grid-column:1/-1}
+    }
+    @media(max-width:620px){
+      .shell{width:min(100% - 24px,1120px);padding-top:18px}
+      .topbar{align-items:flex-start;flex-wrap:wrap}
+      .brand h1{font-size:20px}
+      .week-control{width:100%;margin:4px 0 0}
+      .week-control label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+      select{width:100%}
+      .hero{align-items:flex-start;flex-direction:column;padding:26px 0 20px}
+      .hero h2{font-size:29px}
+      .actions{width:100%}
+      .actions .btn{flex:1}
+      .summary{gap:8px}
+      .metric{min-height:96px;padding:14px}
+      .metric-value{font-size:28px;margin-top:13px}
+      .toolbar{align-items:stretch;flex-direction:column}
+      .search-wrap{max-width:none}
+      .result-count{margin:0}
+      .member{grid-template-columns:1fr;gap:11px;padding:14px}
+      .follow-up{grid-column:auto}
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="logo" aria-hidden="true">P</div>
+      <div class="brand">
+        <h1>Prana Retention</h1>
+        <p>Member follow-up</p>
+      </div>
+      <div class="week-control">
+        <label for="weekSelect">Week</label>
+        <select id="weekSelect" aria-label="Select week" disabled>
+          <option>Loading latest week...</option>
+        </select>
+      </div>
+    </header>
+
+    <div id="status" class="status">
+      <div class="status-inner">
+        <div class="status-icon"><i data-lucide="loader-circle" class="icon spin"></i></div>
+        <h2>Loading retention list</h2>
+        <p>Getting the latest weekly member follow-ups.</p>
+      </div>
+    </div>
+
+    <div id="app" class="hidden">
+      <section class="hero">
+        <div>
+          <div class="eyebrow" id="weekLabel">Weekly retention</div>
+          <h2>Follow-up list</h2>
+          <p id="updatedLabel"></p>
+        </div>
+        <div class="actions">
+          <button class="btn" id="refreshButton" type="button" title="Refresh data">
+            <i data-lucide="refresh-cw" class="icon"></i><span>Refresh</span>
+          </button>
+          <button class="btn btn-primary" id="downloadButton" type="button">
+            <i data-lucide="download" class="icon"></i><span>Download CSV</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="summary" aria-label="Retention summary">
+        <div class="metric">
+          <div class="metric-label"><i data-lucide="list-checks" class="icon"></i>Total follow-ups</div>
+          <div class="metric-value" id="totalCount">0</div>
+        </div>
+        <div class="metric metric-risk">
+          <div class="metric-label"><i data-lucide="triangle-alert" class="icon"></i>At risk</div>
+          <div class="metric-value" id="riskCount">0</div>
+        </div>
+        <div class="metric metric-urgent">
+          <div class="metric-label"><i data-lucide="circle-alert" class="icon"></i>Urgent</div>
+          <div class="metric-value" id="urgentCount">0</div>
+        </div>
+        <div class="metric metric-new">
+          <div class="metric-label"><i data-lucide="user-plus" class="icon"></i>New this week</div>
+          <div class="metric-value" id="newCount">0</div>
+        </div>
+      </section>
+
+      <div class="toolbar">
+        <div class="search-wrap">
+          <i data-lucide="search" class="icon"></i>
+          <input id="searchInput" class="search" type="search" placeholder="Search members" autocomplete="off">
+        </div>
+        <div class="result-count" id="resultCount"></div>
+      </div>
+
+      <div id="sections"></div>
+    </div>
+  </main>
+
+  <script>
+    const state = { current: null, weeks: [], query: '' };
+
+    const $ = id => document.getElementById(id);
+    const esc = value => String(value ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+
+    function redrawIcons() {
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function formatWeek(value) {
+      if (!value) return '';
+      const date = new Date(value + 'T12:00:00');
+      if (Number.isNaN(date.getTime())) return value;
+      return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(date);
+    }
+
+    function formatUpdated(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      return 'Updated ' + new Intl.DateTimeFormat('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
+      }).format(date);
+    }
+
+    function allRows(current = state.current) {
+      const dorian = current?.dorian || {};
+      const base = { membership:'', email:'', phone:'', member_since:'', last_visit:'', days_absent:'', lifetime_visits:'', visits_so_far:'' };
+      const add = (rows, segment, group) => (rows || []).map(member => ({ ...base, ...member, segment, group }));
+      return [
+        ...add(dorian.watch, 'At Risk - 1-2 visits/month', 'risk'),
+        ...add(dorian.never_visited, 'Urgent - Never Visited', 'urgent'),
+        ...add(dorian.critical, 'Urgent - 14-29 days no visit', 'urgent'),
+        ...add(dorian.lost, 'Urgent - 30+ days no visit', 'urgent'),
+        ...add(current?.new_founder_members, 'New This Week', 'new')
+      ];
+    }
+
+    function actionFor(member) {
+      if (member.group === 'new') {
+        const visits = Number(member.visits_so_far || 0);
+        if (visits === 0) return 'Call within 48h and book the first class personally.';
+        if (visits === 1) return 'Send a check-in text and suggest a second class this week.';
+        return 'Track progress toward the 5-visit milestone.';
+      }
+      if (member.segment === 'Urgent - Never Visited' || Number(member.lifetime_visits || 0) === 0) {
+        return 'Call within 48h with an onboarding offer and book the first class.';
+      }
+      const absent = Number(member.days_absent || 0);
+      if (absent >= 30) return 'Make a win-back call and offer a class or 1:1 session.';
+      if (member.group === 'urgent') return 'Make a personal call and identify the barrier to returning.';
+      if (absent >= 14) return 'Send a personal text and suggest a class this week.';
+      return 'Send a quick check-in and book a favourite class this week.';
+    }
+
+    function memberMatches(member) {
+      const query = state.query.trim().toLowerCase();
+      if (!query) return true;
+      return [member.name, member.membership, member.email, member.phone, member.segment]
+        .some(value => String(value || '').toLowerCase().includes(query));
+    }
+
+    function memberCard(member) {
+      const tel = String(member.phone || '').replace(/[^+\d]/g, '');
+      const mail = encodeURIComponent(member.email || '');
+      const meta = [
+        member.last_visit ? 'Last visit: ' + member.last_visit : 'Never visited',
+        member.days_absent !== '' && member.days_absent != null ? member.days_absent + ' days absent' : '',
+        member.member_since ? 'Joined: ' + member.member_since : ''
+      ].filter(Boolean);
+      return `
+        <article class="member">
+          <div>
+            <div class="member-name">${esc(member.name || 'Member')}</div>
+            <div class="membership">${esc(member.membership || member.segment)}</div>
+            <div class="member-meta">${meta.map(item => `<span>${esc(item)}</span>`).join('')}</div>
+          </div>
+          <div class="contact">
+            ${member.phone ? `<a href="tel:${esc(tel)}"><i data-lucide="phone" class="icon"></i><span>${esc(member.phone)}</span></a>` : ''}
+            ${member.email ? `<a href="mailto:${esc(mail)}"><i data-lucide="mail" class="icon"></i><span>${esc(member.email)}</span></a>` : ''}
+            ${!member.phone && !member.email ? '<span class="membership">No contact details</span>' : ''}
+          </div>
+          <div class="follow-up"><strong>Follow up:</strong> ${esc(actionFor(member))}</div>
+        </article>`;
+    }
+
+    function sectionMarkup(group, title, icon, rows) {
+      const filtered = rows.filter(memberMatches);
+      return `
+        <section class="section section-${group}">
+          <div class="section-head">
+            <div class="section-icon"><i data-lucide="${icon}" class="icon"></i></div>
+            <h3 class="section-title">${esc(title)}</h3>
+            <div class="section-count">${filtered.length} member${filtered.length === 1 ? '' : 's'}</div>
+          </div>
+          <div class="member-list">
+            ${filtered.length ? filtered.map(memberCard).join('') : `<div class="empty-section">${state.query ? 'No matching members in this group.' : 'No members in this group this week.'}</div>`}
+          </div>
+        </section>`;
+    }
+
+    function render() {
+      if (!state.current) return;
+      const rows = allRows();
+      const risk = rows.filter(row => row.group === 'risk');
+      const urgent = rows.filter(row => row.group === 'urgent');
+      const newMembers = rows.filter(row => row.group === 'new');
+      const visible = rows.filter(memberMatches).length;
+
+      $('weekLabel').textContent = 'Week of ' + formatWeek(state.current.week_of);
+      $('updatedLabel').textContent = formatUpdated(state.current.uploaded_at);
+      $('totalCount').textContent = rows.length;
+      $('riskCount').textContent = risk.length;
+      $('urgentCount').textContent = urgent.length;
+      $('newCount').textContent = newMembers.length;
+      $('resultCount').textContent = state.query ? `${visible} of ${rows.length} members` : `${rows.length} members`;
+      $('downloadButton').disabled = rows.length === 0;
+      $('sections').innerHTML = [
+        sectionMarkup('risk', 'At risk', 'triangle-alert', risk),
+        sectionMarkup('urgent', 'Urgent', 'circle-alert', urgent),
+        sectionMarkup('new', 'New this week', 'user-plus', newMembers)
+      ].join('');
+      redrawIcons();
+    }
+
+    function populateWeeks() {
+      const select = $('weekSelect');
+      const selected = state.current?.week_of || '';
+      const weeks = state.weeks.length ? state.weeks : [{ week_of: selected }];
+      select.innerHTML = [...weeks].reverse().map(week =>
+        `<option value="${esc(week.week_of)}" ${week.week_of === selected ? 'selected' : ''}>Week of ${esc(formatWeek(week.week_of))}</option>`
+      ).join('');
+      select.disabled = weeks.length < 2;
+    }
+
+    function showError(message) {
+      $('app').classList.add('hidden');
+      $('status').classList.remove('hidden');
+      $('status').innerHTML = `
+        <div class="status-inner">
+          <div class="status-icon" style="background:var(--red-soft);color:var(--red)"><i data-lucide="wifi-off" class="icon"></i></div>
+          <h2>Could not load the list</h2>
+          <p>${esc(message || 'The retention data is temporarily unavailable.')}</p>
+          <button class="btn btn-primary" type="button" onclick="init()"><i data-lucide="refresh-cw" class="icon"></i>Try again</button>
+        </div>`;
+      redrawIcons();
+    }
+
+    async function fetchData(action, weekOf) {
+      const params = new URLSearchParams({ action });
+      if (weekOf) params.set('week_of', weekOf);
+      const response = await fetch('/api/retention?' + params, { headers: { Accept: 'application/json' } });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Retention data is unavailable.');
+      return data;
+    }
+
+    async function loadWeek(weekOf) {
+      const select = $('weekSelect');
+      const button = $('refreshButton');
+      select.disabled = true;
+      button.disabled = true;
+      try {
+        const data = await fetchData('read_week', weekOf);
+        state.current = data.current;
+        populateWeeks();
+        render();
+      } catch (error) {
+        alert(error.message);
+        populateWeeks();
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    function csvValue(value) {
+      return '"' + String(value ?? '').replace(/"/g, '""') + '"';
+    }
+
+    function downloadCSV() {
+      const rows = allRows();
+      if (!rows.length) return;
+      const headers = ['segment','name','membership','email','phone','member_since','last_visit','days_absent',"Gracie's notes"];
+      const output = rows.map(row => ({
+        segment: row.segment,
+        name: row.name || '',
+        membership: row.membership || '',
+        email: row.email || '',
+        phone: row.phone || '',
+        member_since: row.member_since || '',
+        last_visit: row.last_visit || (row.segment === 'Urgent - Never Visited' ? '-' : ''),
+        days_absent: row.days_absent ?? '',
+        "Gracie's notes": ''
+      }));
+      const csv = '\ufeff' + [headers.join(','), ...output.map(row => headers.map(header => csvValue(row[header])).join(','))].join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'prana-retention-' + (state.current.week_of || 'current') + '.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
+    async function init() {
+      $('status').classList.remove('hidden');
+      $('app').classList.add('hidden');
+      try {
+        const manifest = await fetchData('read_weeks');
+        state.weeks = manifest.weeks || [];
+        const latestWeek = state.weeks.at(-1)?.week_of;
+        if (!latestWeek) throw new Error('No retention weeks are available.');
+        const latest = await fetchData('read_week', latestWeek);
+        state.current = latest.current;
+        state.query = '';
+        $('searchInput').value = '';
+        $('status').classList.add('hidden');
+        $('app').classList.remove('hidden');
+        populateWeeks();
+        render();
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    $('weekSelect').addEventListener('change', event => loadWeek(event.target.value));
+    $('searchInput').addEventListener('input', event => { state.query = event.target.value; render(); });
+    $('downloadButton').addEventListener('click', downloadCSV);
+    $('refreshButton').addEventListener('click', init);
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
