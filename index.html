@@ -2677,9 +2677,20 @@ async function init() {
 
     try {
       const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
-      const weeks = (weeksData.weeks || []).sort((a,b) => a.week_of > b.week_of ? 1 : -1);
+      const latestManifestByWeek = new Map();
+      (weeksData.weeks || []).forEach(w => {
+        const existing = latestManifestByWeek.get(w.week_of);
+        if (!existing || String(w.uploaded_at || '') > String(existing.uploaded_at || '')) {
+          latestManifestByWeek.set(w.week_of, w);
+        }
+      });
+      const weeks = [...latestManifestByWeek.values()].sort((a,b) => a.week_of > b.week_of ? 1 : -1);
       const allData = [];
       for (const w of weeks) {
+        if (w.week_of === latestResult.current.week_of) {
+          allData.push(latestResult.current);
+          continue;
+        }
         try {
           const r = await fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(w.week_of)).then(r => r.json());
           if (r.ok && r.current) allData.push(r.current);
