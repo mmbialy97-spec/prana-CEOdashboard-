@@ -1,6 +1,10 @@
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyXKb1IAu8YGfmP86Z8eL4B3YEvKE5cLh6k1MgGOAM2BQ_FRd9zIHbFco631fIFxq07/exec';
+import { getCache, waitUntil } from '@vercel/functions';
 
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyXKb1IAu8YGfmP86Z8eL4B3YEvKE5cLh6k1MgGOAM2BQ_FRd9zIHbFco631fIFxq07/exec';
 const ALLOWED_ACTIONS = new Set(['read_latest', 'read_weeks', 'read_week']);
+const CACHE_TTL_SECONDS = 60 * 60 * 24 * 30;
+const FRESH_FOR_MS = 5 * 60 * 1000;
+const cache = getCache({ namespace: 'prana-retention-v1' });
 
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -15,13 +19,67 @@ export default async function handler(req, res) {
   if (!ALLOWED_ACTIONS.has(action)) {
     return res.status(400).json({ ok: false, error: 'Unsupported action' });
   }
-  res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=86400');
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.setHeader('Vercel-CDN-Cache-Control', 'public, max-age=300, stale-while-revalidate=86400');
+  res.setHeader('CDN-Cache-Control', 'public, max-age=300, stale-while-revalidate=86400');
 
   const weekOf = cleanDate(req.query?.week_of);
   if (action === 'read_week' && !/^\d{4}-\d{2}-\d{2}$/.test(weekOf || '')) {
     return res.status(400).json({ ok: false, error: 'A valid week is required' });
   }
 
+  const cacheKey = action === 'read_weeks' ? 'weeks' : `week:${weekOf || 'latest'}`;
+  const startedAt = Date.now();
+  let cached;
+
+  try {
+    cached = await cache.get(cacheKey);
+  } catch (error) {
+    console.warn('[retention] cache read failed', { action, error: errorMessage(error) });
+  }
+
+  if (cached?.payload) {
+    const ageMs = Math.max(Date.now() - Number(cached.fetched_at || 0), 0);
+    if (ageMs >= FRESH_FOR_MS) {
+      waitUntil(refreshCache(cacheKey, action, weekOf).catch(error => {
+        console.error('[retention] background refresh failed', { action, duration_ms: Date.now() - startedAt, error: errorMessage(error) });
+      }));
+    }
+
+    console.log('[retention] served cached data', { action, age_ms: ageMs, refreshing: ageMs >= FRESH_FOR_MS });
+    res.setHeader('X-Retention-Source', ageMs >= FRESH_FOR_MS ? 'stale-cache' : 'cache');
+    return res.status(200).json(cached.payload);
+  }
+
+  try {
+    const payload = await readFromSource(action, weekOf);
+    await writeCache(cacheKey, payload);
+    console.log('[retention] served upstream data', { action, duration_ms: Date.now() - startedAt });
+    res.setHeader('X-Retention-Source', 'upstream');
+    return res.status(200).json(payload);
+  } catch (error) {
+    const message = error?.name === 'AbortError'
+      ? 'The retention data took too long to respond. Please try again.'
+      : 'The retention data is temporarily unavailable.';
+    console.error('[retention] upstream read failed', { action, duration_ms: Date.now() - startedAt, error: errorMessage(error) });
+    return res.status(502).json({ ok: false, error: message });
+  }
+}
+
+async function refreshCache(cacheKey, action, weekOf) {
+  const payload = await readFromSource(action, weekOf);
+  await writeCache(cacheKey, payload);
+}
+
+async function writeCache(cacheKey, payload) {
+  await cache.set(cacheKey, { payload, fetched_at: Date.now() }, {
+    ttl: CACHE_TTL_SECONDS,
+    tags: ['retention'],
+    name: 'prana-retention-read'
+  });
+}
+
+async function readFromSource(action, weekOf) {
   const url = new URL(APPS_SCRIPT_URL);
   url.searchParams.set('action', action);
   if (weekOf) url.searchParams.set('week_of', weekOf);
@@ -35,38 +93,36 @@ export default async function handler(req, res) {
       signal: controller.signal,
       headers: { Accept: 'application/json, text/plain, */*' }
     });
-    const body = await response.text();
-    const source = parseResponse(body);
-
-    if (action === 'read_weeks') {
-      const latestByWeek = new Map();
-      (source.weeks || []).forEach(item => {
-        const week = cleanDate(item?.week_of);
-        if (!week) return;
-        const current = latestByWeek.get(week);
-        if (!current || String(item.uploaded_at || '') > String(current.uploaded_at || '')) {
-          latestByWeek.set(week, { week_of: week, uploaded_at: item.uploaded_at || '' });
-        }
-      });
-      return res.status(200).json({
-        ok: true,
-        weeks: [...latestByWeek.values()].sort((a, b) => a.week_of.localeCompare(b.week_of))
-      });
-    }
-
-    if (!source.current) {
-      return res.status(404).json({ ok: false, error: 'No retention data found' });
-    }
-
-    return res.status(200).json({ ok: true, current: retentionOnly(source.current) });
-  } catch (error) {
-    const message = error?.name === 'AbortError'
-      ? 'The retention data took too long to respond. Please try again.'
-      : 'The retention data is temporarily unavailable.';
-    return res.status(502).json({ ok: false, error: message });
+    const source = parseResponse(await response.text());
+    return sourcePayload(action, source);
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function sourcePayload(action, source) {
+  if (action === 'read_weeks') {
+    const latestByWeek = new Map();
+    (source.weeks || []).forEach(item => {
+      const week = cleanDate(item?.week_of);
+      if (!week) return;
+      const current = latestByWeek.get(week);
+      if (!current || String(item.uploaded_at || '') > String(current.uploaded_at || '')) {
+        latestByWeek.set(week, { week_of: week, uploaded_at: item.uploaded_at || '' });
+      }
+    });
+    return {
+      ok: true,
+      weeks: [...latestByWeek.values()].sort((a, b) => a.week_of.localeCompare(b.week_of))
+    };
+  }
+
+  if (!source.current) throw new Error('No retention data found');
+  return { ok: true, current: retentionOnly(source.current) };
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function parseResponse(text) {
