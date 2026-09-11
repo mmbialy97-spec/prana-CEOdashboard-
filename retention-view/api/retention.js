@@ -84,20 +84,33 @@ async function readFromSource(action, weekOf) {
   url.searchParams.set('action', action);
   if (weekOf) url.searchParams.set('week_of', weekOf);
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 55000);
+  const controllers = [new AbortController(), new AbortController()];
+  const timeout = setTimeout(() => controllers.forEach(controller => controller.abort()), 55000);
 
   try {
-    const response = await fetch(url, {
-      redirect: 'follow',
-      signal: controller.signal,
-      headers: { Accept: 'application/json, text/plain, */*' }
-    });
-    const source = parseResponse(await response.text());
-    return sourcePayload(action, source);
+    return await Promise.any([
+      readSourceAttempt(url, action, controllers[0].signal),
+      delay(750).then(() => readSourceAttempt(url, action, controllers[1].signal))
+    ]);
   } finally {
     clearTimeout(timeout);
+    controllers.forEach(controller => controller.abort());
   }
+}
+
+async function readSourceAttempt(url, action, signal) {
+  const response = await fetch(url, {
+    redirect: 'follow',
+    signal,
+    headers: { Accept: 'application/json, text/plain, */*' }
+  });
+  if (!response.ok) throw new Error(`Upstream returned HTTP ${response.status}`);
+  const source = parseResponse(await response.text());
+  return sourcePayload(action, source);
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function sourcePayload(action, source) {
