@@ -197,6 +197,30 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
 .chat-answer ol li::before{content:counter(chatItem);width:18px;height:18px;border-radius:50%;background:var(--green-light);color:var(--green);font-family:var(--mono);font-size:10px;display:flex;align-items:center;justify-content:center;position:absolute;left:0;top:0.2em}
 .chat-answer strong{font-weight:700;color:var(--ink)}
 .chat-metric{font-family:var(--mono);font-size:0.94em;color:var(--green);background:var(--green-light);border-radius:5px;padding:1px 5px;white-space:nowrap}
+.chat-chart{border-top:1px solid var(--border);padding:16px 18px 18px}
+.chat-chart-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}
+.chat-chart-title{font-size:13px;font-weight:700;color:var(--ink);line-height:1.35}
+.chat-chart-range{font-family:var(--mono);font-size:10px;color:var(--ink-3);white-space:nowrap;margin-top:2px}
+.chat-chart-legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.chat-chart-key{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-2)}
+.chat-chart-swatch{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+.chat-chart-plot{position:relative;width:100%;height:260px;min-width:0}
+.chat-chart-canvas{display:block;width:100%;height:260px;touch-action:pan-y}
+.chat-chart-tooltip{display:none;position:absolute;z-index:2;pointer-events:none;min-width:142px;max-width:210px;background:var(--ink);color:#fff;border-radius:6px;padding:9px 10px;box-shadow:0 6px 18px rgba(0,0,0,0.18);font-size:11px;line-height:1.5}
+.chat-chart-tooltip.visible{display:block}
+.chat-chart-tooltip-week{font-family:var(--mono);color:rgba(255,255,255,0.58);margin-bottom:4px}
+.chat-chart-tooltip-row{display:flex;justify-content:space-between;gap:12px;white-space:nowrap}
+.chat-chart-tooltip-row strong{font-family:var(--mono);color:#fff}
+.chat-chart-data{border-top:1px solid var(--border);margin-top:8px;padding-top:9px}
+.chat-chart-data summary{cursor:pointer;font-size:11px;color:var(--ink-3);list-style:none;width:max-content}
+.chat-chart-data summary::-webkit-details-marker{display:none}
+.chat-chart-data summary::before{content:'+';display:inline-block;width:14px;font-family:var(--mono);color:var(--green)}
+.chat-chart-data[open] summary::before{content:'−'}
+.chat-chart-table-wrap{overflow-x:auto;margin-top:9px;max-height:220px;overflow-y:auto}
+.chat-chart-table{width:100%;border-collapse:collapse;font-size:11px}
+.chat-chart-table th,.chat-chart-table td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
+.chat-chart-table th:first-child,.chat-chart-table td:first-child{text-align:left}
+.chat-chart-table th{position:sticky;top:0;background:var(--surface);font-size:9px;text-transform:uppercase;color:var(--ink-3);font-weight:600}
 .chat-message{max-width:72%;border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;font-size:14px;line-height:1.55;white-space:pre-wrap}
 .chat-message.user{background:var(--green);border-color:var(--green);color:#fff}
 .chat-message.system{max-width:100%;align-self:center;background:var(--green-light);border-color:var(--green);color:var(--green);font-size:13px;text-align:center}
@@ -226,6 +250,10 @@ body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:10
   .chat-message{max-width:92%;font-size:13px}
   .chat-card-head{padding:10px 12px}
   .chat-answer{padding:14px;font-size:13px}
+  .chat-chart{padding:14px 12px 16px}
+  .chat-chart-head{display:block}
+  .chat-chart-range{white-space:normal;margin-top:3px}
+  .chat-chart-plot,.chat-chart-canvas{height:230px}
   .chat-composer{flex-direction:column;align-items:stretch}
   .chat-submit{width:100%}
 }
@@ -282,9 +310,11 @@ let state = {
   allWeeksLoading: false,
   chatMessages: [],
   chatLoading: false,
+  chatLoadingText: '',
   error: null,
   freshUpload: false,
 };
+let historyHydrationPromise = null;
 
 // ─── Render ───────────────────────────────────────────────────────
 function render() {
@@ -573,18 +603,215 @@ function reconcileMembershipSeries(weeks) {
   });
   return sorted;
 }
-function renderChatMessage(msg) {
+function renderChatMessage(msg, messageIndex) {
   if (msg.role === 'user') {
     return `<div class="chat-turn user-turn"><div class="chat-message user">${esc(msg.content)}</div></div>`;
   }
+  const charts = Array.isArray(msg.charts) ? msg.charts : [];
   return `
   <div class="chat-turn assistant-turn">
     <div class="chat-avatar">P</div>
     <div class="chat-card">
       <div class="chat-card-head"><span>Prana Analyst</span><span>${esc(state.selectedWeek || '')}</span></div>
       <div class="chat-answer">${formatAssistantAnswer(msg.content)}</div>
+      ${charts.map((chart, chartIndex) => renderChatChart(chart, messageIndex, chartIndex)).join('')}
     </div>
   </div>`;
+}
+
+function renderChatChart(chart, messageIndex, chartIndex) {
+  const labels = Array.isArray(chart?.labels) ? chart.labels : [];
+  const series = Array.isArray(chart?.series) ? chart.series : [];
+  if (!labels.length || !series.length) return '';
+  const firstWeek = labels[0] || '';
+  const lastWeek = labels[labels.length - 1] || '';
+  const chartTitle = chart.title || series.map(item => item.label).join(' vs ');
+  const ariaLabel = `${chartTitle}, ${labels.length} weeks from ${firstWeek} through ${lastWeek}`;
+  return `
+    <section class="chat-chart" aria-label="${esc(ariaLabel)}">
+      <div class="chat-chart-head">
+        <div class="chat-chart-title">${esc(chartTitle)}</div>
+        <div class="chat-chart-range">${labels.length} weeks · ${esc(firstWeek)} → ${esc(lastWeek)}</div>
+      </div>
+      <div class="chat-chart-legend">
+        ${series.map(item => `<span class="chat-chart-key"><span class="chat-chart-swatch" style="background:${esc(item.color)}"></span>${esc(item.label)}</span>`).join('')}
+      </div>
+      <div class="chat-chart-plot">
+        <canvas class="chat-chart-canvas" data-chat-message="${messageIndex}" data-chat-chart="${chartIndex}" role="img" aria-label="${esc(ariaLabel)}"></canvas>
+        <div class="chat-chart-tooltip" aria-hidden="true"></div>
+      </div>
+      ${renderChatChartTable(chart)}
+    </section>`;
+}
+
+function renderChatChartTable(chart) {
+  const labels = Array.isArray(chart?.labels) ? chart.labels : [];
+  const series = Array.isArray(chart?.series) ? chart.series : [];
+  return `
+    <details class="chat-chart-data">
+      <summary>View exact data</summary>
+      <div class="chat-chart-table-wrap">
+        <table class="chat-chart-table">
+          <thead><tr><th>Week</th>${series.map(item => `<th>${esc(item.label)}</th>`).join('')}</tr></thead>
+          <tbody>${labels.map((label, index) => `
+            <tr><td>${esc(label)}</td>${series.map(item => `<td>${formatChartValue(item.values?.[index], item.format)}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </details>`;
+}
+
+function formatChartValue(value, format, compact = false) {
+  if (value == null || !Number.isFinite(Number(value))) return '—';
+  const number = Number(value);
+  if (format === 'currency') {
+    if (compact && Math.abs(number) >= 1000) return '$' + (number / 1000).toFixed(Math.abs(number) >= 10000 ? 0 : 1) + 'k';
+    return '$' + Math.round(number).toLocaleString();
+  }
+  if (format === 'percent') return (Math.round(number * 10) / 10) + '%';
+  if (format === 'decimal') return (Math.round(number * 10) / 10).toLocaleString();
+  if (compact && Math.abs(number) >= 1000) return (number / 1000).toFixed(Math.abs(number) >= 10000 ? 0 : 1) + 'k';
+  return Math.round(number).toLocaleString();
+}
+
+function shortChartWeek(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return String(value || '');
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return date.toLocaleDateString('en-US', { month:'short', day:'numeric', timeZone:'UTC' });
+}
+
+function renderChatCharts() {
+  document.querySelectorAll('.chat-chart-canvas').forEach(canvas => {
+    const message = state.chatMessages?.[Number(canvas.dataset.chatMessage)];
+    const chart = message?.charts?.[Number(canvas.dataset.chatChart)];
+    if (chart) drawChatChart(canvas, chart);
+  });
+}
+
+function drawChatChart(canvas, chart) {
+  const labels = Array.isArray(chart?.labels) ? chart.labels : [];
+  const series = (Array.isArray(chart?.series) ? chart.series : []).filter(item => Array.isArray(item.values));
+  const values = series.flatMap(item => item.values).filter(value => value != null && Number.isFinite(Number(value))).map(Number);
+  const plot = canvas.parentElement;
+  const width = Math.round(plot?.clientWidth || 0);
+  const height = Math.round(parseFloat(getComputedStyle(canvas).height) || 260);
+  if (!width || labels.length < 2 || !series.length || !values.length) return;
+
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(width * pixelRatio);
+  canvas.height = Math.round(height * pixelRatio);
+  const context = canvas.getContext('2d');
+  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  context.clearRect(0, 0, width, height);
+
+  const colors = getComputedStyle(document.documentElement);
+  const ink3 = colors.getPropertyValue('--ink-3').trim() || '#9A9A94';
+  const border = colors.getPropertyValue('--border').trim() || '#E2DDD8';
+  const font = getComputedStyle(document.body).fontFamily;
+  const margins = { left:54, right:28, top:12, bottom:34 };
+  const plotWidth = Math.max(width - margins.left - margins.right, 1);
+  const plotHeight = Math.max(height - margins.top - margins.bottom, 1);
+
+  let minimum = Math.min(...values);
+  let maximum = Math.max(...values);
+  if (chart.type === 'bar') {
+    minimum = Math.min(0, minimum);
+    maximum = Math.max(0, maximum);
+  } else {
+    const padding = Math.max((maximum - minimum) * 0.12, Math.abs(maximum) * 0.04, 1);
+    minimum = minimum >= 0 ? Math.max(0, minimum - padding) : minimum - padding;
+    maximum += padding;
+  }
+  if (minimum === maximum) maximum = minimum + 1;
+
+  const xFor = index => chart.type === 'bar'
+    ? margins.left + (index + 0.5) / labels.length * plotWidth
+    : margins.left + (labels.length === 1 ? plotWidth / 2 : index / (labels.length - 1) * plotWidth);
+  const yFor = value => margins.top + (maximum - Number(value)) / (maximum - minimum) * plotHeight;
+  const format = series[0]?.format || 'number';
+
+  context.lineWidth = 1;
+  context.font = `10px ${font}`;
+  context.textAlign = 'right';
+  context.textBaseline = 'middle';
+  for (let index = 0; index <= 4; index++) {
+    const value = maximum - index / 4 * (maximum - minimum);
+    const y = margins.top + index / 4 * plotHeight;
+    context.strokeStyle = border;
+    context.beginPath();
+    context.moveTo(margins.left, y);
+    context.lineTo(width - margins.right, y);
+    context.stroke();
+    context.fillStyle = ink3;
+    context.fillText(formatChartValue(value, format, true), margins.left - 8, y);
+  }
+
+  const tickIndexes = [...new Set([0, Math.round((labels.length - 1) / 4), Math.round((labels.length - 1) / 2), Math.round((labels.length - 1) * 3 / 4), labels.length - 1])];
+  context.textAlign = 'center';
+  context.textBaseline = 'top';
+  context.fillStyle = ink3;
+  tickIndexes.forEach(index => context.fillText(shortChartWeek(labels[index]), xFor(index), height - margins.bottom + 10));
+
+  if (chart.type === 'bar') {
+    const step = plotWidth / labels.length;
+    const groupWidth = Math.min(step * 0.76, 34);
+    const barWidth = Math.max(groupWidth / series.length - 1, 1);
+    const zeroY = yFor(0);
+    series.forEach((item, seriesIndex) => {
+      context.fillStyle = item.color || '#2D6A4F';
+      item.values.forEach((rawValue, index) => {
+        if (rawValue == null || !Number.isFinite(Number(rawValue))) return;
+        const valueY = yFor(rawValue);
+        const x = xFor(index) - groupWidth / 2 + seriesIndex * (barWidth + 1);
+        context.fillRect(x, Math.min(valueY, zeroY), barWidth, Math.max(Math.abs(zeroY - valueY), 1));
+      });
+    });
+  } else {
+    series.forEach(item => {
+      context.strokeStyle = item.color || '#2D6A4F';
+      context.lineWidth = 2;
+      context.lineJoin = 'round';
+      context.lineCap = 'round';
+      context.beginPath();
+      let hasPoint = false;
+      item.values.forEach((rawValue, index) => {
+        if (rawValue == null || !Number.isFinite(Number(rawValue))) { hasPoint = false; return; }
+        const x = xFor(index);
+        const y = yFor(rawValue);
+        if (hasPoint) context.lineTo(x, y); else context.moveTo(x, y);
+        hasPoint = true;
+      });
+      context.stroke();
+      item.values.forEach((rawValue, index) => {
+        if (rawValue == null || !Number.isFinite(Number(rawValue))) return;
+        context.fillStyle = item.color || '#2D6A4F';
+        context.beginPath();
+        context.arc(xFor(index), yFor(rawValue), index === labels.length - 1 ? 3.5 : 2.25, 0, Math.PI * 2);
+        context.fill();
+      });
+    });
+  }
+
+  const tooltip = plot.querySelector('.chat-chart-tooltip');
+  canvas.onpointermove = event => {
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    if (x < margins.left || x > width - margins.right || y < margins.top || y > height - margins.bottom) {
+      tooltip.classList.remove('visible');
+      return;
+    }
+    const rawIndex = chart.type === 'bar'
+      ? Math.floor((x - margins.left) / plotWidth * labels.length)
+      : Math.round((x - margins.left) / plotWidth * (labels.length - 1));
+    const index = Math.max(0, Math.min(labels.length - 1, rawIndex));
+    tooltip.innerHTML = `<div class="chat-chart-tooltip-week">${esc(labels[index])}</div>` + series.map(item => `
+      <div class="chat-chart-tooltip-row"><span>${esc(item.label)}</span><strong>${formatChartValue(item.values[index], item.format)}</strong></div>`).join('');
+    tooltip.style.left = Math.min(Math.max(x + 10, 4), Math.max(width - 214, 4)) + 'px';
+    tooltip.style.top = Math.min(Math.max(y - 18, 4), height - 92) + 'px';
+    tooltip.classList.add('visible');
+  };
+  canvas.onpointerleave = () => tooltip.classList.remove('visible');
 }
 function metricCard(label, value, sub, accentColor) {
   const color = accentColor || 'var(--ink)';
@@ -1095,14 +1322,14 @@ function renderDataChat() {
   const messages = state.chatMessages || [];
   const samples = [
     'What needs CEO attention this week?',
-    'Top 3 retention actions?',
-    'What is the revenue risk?',
-    'Which class decision matters most?'
+    'Chart active membership across all history',
+    'Graph MRR and weekly sales over time',
+    'Bar chart new members vs churn by week'
   ];
 
   const intro = messages.length ? '' : `
     <div class="chat-message system">
-      Ask for brief, tactical answers based on uploaded dashboard history.
+      Prana Analyst · full-history answers and charts
     </div>`;
 
   return `
@@ -1110,13 +1337,13 @@ function renderDataChat() {
     <div class="chat-panel">
       <div class="chat-thread" id="chatThread">
         ${intro}
-        ${messages.map(renderChatMessage).join('')}
+        ${messages.map((message, index) => renderChatMessage(message, index)).join('')}
         ${state.chatLoading ? `
           <div class="chat-turn assistant-turn">
             <div class="chat-avatar">P</div>
             <div class="chat-card">
               <div class="chat-card-head"><span>Prana Analyst</span><span>${esc(state.selectedWeek || '')}</span></div>
-              <div class="chat-answer"><p><span class="spinner" style="display:inline-block;width:14px;height:14px;margin-right:8px;vertical-align:-2px"></span>Reading the dashboard data...</p></div>
+              <div class="chat-answer"><p><span class="spinner" style="display:inline-block;width:14px;height:14px;margin-right:8px;vertical-align:-2px"></span>${esc(state.chatLoadingText || 'Reading all saved dashboard history...')}</p></div>
             </div>
           </div>` : ''}
       </div>
@@ -1135,7 +1362,7 @@ function renderDataChat() {
         <div class="chat-stat"><span>Net Growth</span><span>${(m.net_growth || 0) > 0 ? '+' : ''}${m.net_growth || 0}</span></div>
         <div class="chat-stat"><span>At Risk / Urgent</span><span>${hs.amber || 0} / ${hs.red || 0}</span></div>
         <div class="chat-stat"><span>Schedule Rows</span><span>${(c.class_schedule || []).length || '—'}</span></div>
-        <div class="chat-stat"><span>History Loaded</span><span>${state.allWeeksData.length} week${state.allWeeksData.length === 1 ? '' : 's'}</span></div>
+        <div class="chat-stat"><span>History Loaded</span><span>${state.allWeeksData.length} / ${state.weeks.length || state.allWeeksData.length} weeks</span></div>
       </div>
       <div class="chat-context">
         <div class="chat-context-title">Quick Questions</div>
@@ -1155,7 +1382,7 @@ function buildChatPayload(question) {
   const history = (state.allWeeksData || [])
     .filter(w => w && w.week_of)
     .sort((a,b) => a.week_of > b.week_of ? 1 : -1)
-    .slice(-12);
+    .map(compactChatHistoryWeek);
   return {
     question,
     current,
@@ -1165,14 +1392,72 @@ function buildChatPayload(question) {
   };
 }
 
+function compactChatHistoryWeek(week) {
+  return {
+    week_of: week.week_of,
+    revenue: {
+      mrr: week.revenue?.mrr,
+      total_weekly: week.revenue?.total_weekly,
+      pack_and_class: week.revenue?.pack_and_class,
+      mrr_pct: week.revenue?.mrr_pct,
+      revenue_per_member: week.revenue?.revenue_per_member,
+    },
+    membership: {
+      active_count: week.membership?.active_count,
+      new_this_week: week.membership?.new_this_week,
+      churned_this_week: week.membership?.churned_this_week,
+      net_growth: week.membership?.net_growth,
+      churn_rate_pct: week.membership?.churn_rate_pct,
+      failed_payment_count: week.membership?.failed_payment_count,
+    },
+    health_summary: week.health_summary || {},
+    member_product_counts: week.member_product_counts || {},
+    avg_founder_visits: week.avg_founder_visits,
+    avg_member_visits: week.avg_founder_visits,
+    attendance: { total_visits: week.attendance?.total_visits },
+    avg_per_session: week.avg_per_session,
+  };
+}
+
+async function ensureChatHistoryLoaded() {
+  if (historyHydrationPromise) await historyHydrationPromise;
+  const expectedWeeks = [...(state.weeks || [])].sort((a,b) => a.week_of > b.week_of ? 1 : -1);
+  const missing = expectedWeeks.filter(item => !state.allWeeksData.some(week => week.week_of === item.week_of));
+  state.allWeeksLoading = Boolean(missing.length);
+  try {
+    await loadHistoryBatch(missing, 4, false);
+  } finally {
+    state.allWeeksLoading = false;
+  }
+  const unresolved = expectedWeeks.filter(item => !state.allWeeksData.some(week => week.week_of === item.week_of));
+  if (unresolved.length) throw new Error(`${unresolved.length} saved week${unresolved.length === 1 ? '' : 's'} could not be loaded`);
+}
+
+async function loadHistoryBatch(items, concurrency, stopForFreshUpload) {
+  const queue = [...(items || [])];
+  const workers = Array.from({ length:Math.min(Math.max(concurrency || 1, 1), queue.length) }, async () => {
+    while (queue.length) {
+      if (stopForFreshUpload && state.freshUpload) return;
+      const item = queue.shift();
+      if (!item || state.allWeeksData.some(week => week.week_of === item.week_of)) continue;
+      try { await loadWeekRecord(item.week_of); } catch {}
+    }
+  });
+  await Promise.all(workers);
+}
+
 async function submitChatQuestion(question) {
   const q = String(question || '').trim();
   if (!q || state.chatLoading) return;
   state.chatMessages = [...(state.chatMessages || []), { role:'user', content:q }];
   state.chatLoading = true;
+  state.chatLoadingText = `Loading all ${state.weeks.length || state.allWeeksData.length} saved weeks...`;
   render();
 
   try {
+    await ensureChatHistoryLoaded();
+    state.chatLoadingText = 'Building the answer and visual...';
+    render();
     const res = await fetch('/api/chat', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -1180,7 +1465,11 @@ async function submitChatQuestion(question) {
     });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || 'Chat failed');
-    state.chatMessages = [...state.chatMessages, { role:'assistant', content:data.answer }];
+    state.chatMessages = [...state.chatMessages, {
+      role:'assistant',
+      content:data.answer,
+      charts:Array.isArray(data.charts) ? data.charts : []
+    }];
   } catch(err) {
     state.chatMessages = [...state.chatMessages, {
       role:'assistant',
@@ -1189,6 +1478,7 @@ async function submitChatQuestion(question) {
   }
 
   state.chatLoading = false;
+  state.chatLoadingText = '';
   render();
 }
 
@@ -1646,6 +1936,7 @@ function bindEvents() {
     };
     const thread = document.getElementById('chatThread');
     if (thread) thread.scrollTop = thread.scrollHeight;
+    requestAnimationFrame(renderChatCharts);
   }
   const fileInput = document.getElementById('fileInput');
   if (fileInput) fileInput.onchange = handleFiles;
@@ -2710,15 +3001,19 @@ async function switchWeek(weekOf) {
   }
 }
 
-async function hydrateHistoryInBackground(weeks) {
-  const missing = [...(weeks || [])]
-    .reverse()
-    .filter(w => !state.allWeeksData.some(loaded => loaded.week_of === w.week_of));
-  for (const week of missing) {
-    if (state.freshUpload) return;
-    try { await loadWeekRecord(week.week_of); } catch {}
-  }
-  if (!state.freshUpload && (state.tab === 'trends' || state.tab === 'chat')) render();
+function hydrateHistoryInBackground(weeks) {
+  if (historyHydrationPromise) return historyHydrationPromise;
+  const run = (async () => {
+    const missing = [...(weeks || [])]
+      .reverse()
+      .filter(w => !state.allWeeksData.some(loaded => loaded.week_of === w.week_of));
+    await loadHistoryBatch(missing, 4, true);
+    if (!state.freshUpload && (state.tab === 'trends' || state.tab === 'chat')) render();
+  })();
+  historyHydrationPromise = run;
+  const clear = () => { if (historyHydrationPromise === run) historyHydrationPromise = null; };
+  run.then(clear, clear);
+  return run;
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────
@@ -2769,6 +3064,14 @@ async function init() {
   }
 
   render();
+}
+
+let chatChartResizeTimer = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', () => {
+    clearTimeout(chatChartResizeTimer);
+    chatChartResizeTimer = setTimeout(renderChatCharts, 120);
+  });
 }
 
 init();
