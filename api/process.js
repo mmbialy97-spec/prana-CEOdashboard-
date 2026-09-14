@@ -9,7 +9,7 @@
 //  4. Legacy founder_* keys are treated as active-member compatibility keys.
 // ════════════════════════════════════════════════════════════════
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyXKb1IAu8YGfmP86Z8eL4B3YEvKE5cLh6k1MgGOAM2BQ_FRd9zIHbFco631fIFxq07/exec';
+const AI_TIMEOUT_MS = 22000;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -21,68 +21,82 @@ export default async function handler(req, res) {
 
   try {
     const data = req.body;
-    if (!data) return res.status(400).json({ error: 'No data received' });
+    if (!data?.week_of) return res.status(400).json({ ok: false, error: 'No data received' });
 
+    const historyWeeks = (Array.isArray(data.history) ? data.history : [])
+      .filter(item => item?.week_of)
+      .sort((a, b) => String(a.week_of).localeCompare(String(b.week_of)));
+    const previousSummary = historyWeeks.at(-1) || null;
+    const previous = previousSummary ? summaryToPrevious(previousSummary) : null;
+    const slimData = buildSlimData(data, previousSummary);
+
+    let result = null;
+    let source = 'calculated';
     const key = process.env.ANTHROPIC_KEY;
-    if (!key) return res.status(500).json({ error: 'ANTHROPIC_KEY not set' });
 
-    // ── Fetch previous week (for wow comparisons) ──
-    let previous = null;
-    try {
-      const prevRes   = await fetch(APPS_SCRIPT_URL + '?action=get_previous&week_of=' + encodeURIComponent(data.week_of), { redirect: 'follow' });
-      const prevText  = await prevRes.text();
-      const prevClean = prevText.trim().replace(/^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/, '').replace(/\)\s*;?\s*$/, '');
-      const prevData  = JSON.parse(prevClean);
-      if (prevData.ok) previous = prevData.data;
-    } catch { /* optional */ }
-
-    // ── Use history sent from browser (last 4 weeks already loaded) ──
-    const historyWeeks = Array.isArray(data.history) ? data.history : [];
-
-    const slimData = {
-      week_of:             data.week_of,
-      sales_total:         data.sales_total,           // Now = non-membership sales only
-      non_autopay_total:   data.non_autopay_total,     // Same as sales_total, kept for clarity
-      mrr:                 data.mrr,                   // Browser-calculated tier MRR
-      total_weekly_revenue:data.total_weekly_revenue,  // mrr + non_autopay
-      active_count:        data.active_count,
-      new_this_week:       data.first_visit_count,
-      cancelled_count:     data.cancelled_count,
-      flow_net_growth:     data.first_visit_count - data.cancelled_count,
-      first_time_visitors: data.first_time_visitors,
-      no_show_count:       data.no_show_count,
-      avg_founder_visits:  data.avg_founder_visits,
-      avg_member_visits:   data.avg_founder_visits,
-      health_summary:      data.health_summary,
-      total_sessions:      data.total_sessions,
-      avg_per_session:     data.avg_per_session,
-      failed_payments:     (data.failed_payments     || []).slice(0, 20),
-      no_return_members:   (data.no_return_members   || []).slice(0, 10),
-      cancelled_members:   (data.cancelled_members   || []).slice(0, 5),
-      new_founder_members: (data.new_founder_members || []).slice(0, 5),
-      member_product_counts: data.member_product_counts || {},
-      class_data:          (data.class_data          || []).slice(0, 10),
-      class_schedule:      (data.class_schedule      || []).slice(0, 60),
-      founder_classes:     (data.founder_classes     || []).slice(0, 5),
-      member_classes:      (data.founder_classes     || []).slice(0, 5),
-      instructor_data:     (data.instructor_data     || []).slice(0, 5),
-      peak_times:          (data.peak_times          || []).slice(0, 5),
-      peak_days:           (data.peak_days           || []).slice(0, 7),
-    };
-
-    if (previous) {
-      slimData.previous_week = {
-        week_of:       previous.week_of,
-        active_count:  previous.membership?.active_count  || previous.active_count  || 0,
-        new_this_week: previous.membership?.new_this_week || 0,
-        churned:       previous.membership?.churned_this_week || 0,
-        mrr:           previous.revenue?.mrr || 0,
-        avg_visits:    previous.avg_founder_visits || 0,
-      };
+    if (key) {
+      try {
+        result = await requestClaude(key, slimData, historyWeeks);
+        source = 'claude';
+      } catch (error) {
+        console.warn('[dashboard-process] AI unavailable, using calculated result', { error: errorMessage(error) });
+      }
     }
 
+    if (!result) result = buildCalculatedResult(data, historyWeeks);
+    result.week_of = data.week_of;
+    result.uploaded_at = new Date().toISOString();
+
+    console.log('[dashboard-process] completed', { week_of: data.week_of, source });
+    return res.status(200).json({ ok: true, current: result, previous, source });
+  } catch (error) {
+    console.error('[dashboard-process] failed', { error: errorMessage(error) });
+    return res.status(500).json({ ok: false, error: 'The uploaded reports could not be processed.' });
+  }
+}
+
+function buildSlimData(data, previousSummary) {
+  const slimData = {
+    week_of: data.week_of,
+    sales_total: data.sales_total,
+    non_autopay_total: data.non_autopay_total,
+    mrr: data.mrr,
+    total_weekly_revenue: data.total_weekly_revenue,
+    active_count: data.active_count,
+    new_this_week: data.first_visit_count,
+    cancelled_count: data.cancelled_count,
+    flow_net_growth: data.first_visit_count - data.cancelled_count,
+    first_time_visitors: data.first_time_visitors,
+    no_show_count: data.no_show_count,
+    avg_founder_visits: data.avg_founder_visits,
+    avg_member_visits: data.avg_founder_visits,
+    health_summary: data.health_summary,
+    total_sessions: data.total_sessions,
+    avg_per_session: data.avg_per_session,
+    failed_payments: (data.failed_payments || []).slice(0, 20),
+    no_return_members: (data.no_return_members || []).slice(0, 10),
+    cancelled_members: (data.cancelled_members || []).slice(0, 5),
+    new_founder_members: (data.new_founder_members || []).slice(0, 5),
+    member_product_counts: data.member_product_counts || {},
+    class_data: (data.class_data || []).slice(0, 10),
+    class_schedule: (data.class_schedule || []).slice(0, 60),
+    founder_classes: (data.founder_classes || []).slice(0, 5),
+    member_classes: (data.founder_classes || []).slice(0, 5),
+    instructor_data: (data.instructor_data || []).slice(0, 5),
+    peak_times: (data.peak_times || []).slice(0, 5),
+    peak_days: (data.peak_days || []).slice(0, 7)
+  };
+  if (previousSummary) slimData.previous_week = previousSummary;
+  return slimData;
+}
+
+async function requestClaude(key, slimData, historyWeeks) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+  try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': key,
@@ -90,47 +104,142 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'claude-opus-4-5',
-        max_tokens: 8000,
+        max_tokens: 2400,
         messages: [{ role: 'user', content: buildPrompt(slimData, historyWeeks) }]
       })
     });
-
+    if (!response.ok) throw new Error(`Claude returned HTTP ${response.status}`);
     const claude = await response.json();
-
-    if (!claude.content || !claude.content[0]) {
-      return res.status(500).json({ error: 'No response from Claude', detail: claude });
-    }
-
-    let text = claude.content[0].text.trim();
-    text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
-    let result;
-    const startIdx = text.indexOf('{');
-    if (startIdx === -1) {
-      return res.status(500).json({ error: 'No JSON in Claude response', raw: text.substring(0, 500) });
-    }
-    let depth = 0, endIdx = -1;
-    for (let i = startIdx; i < text.length; i++) {
-      if (text[i] === '{') depth++;
-      else if (text[i] === '}') { depth--; if (depth === 0) { endIdx = i; break; } }
-    }
-    if (endIdx === -1) {
-      return res.status(500).json({ error: 'Incomplete JSON in Claude response' });
-    }
-    try {
-      result = JSON.parse(text.substring(startIdx, endIdx + 1));
-    } catch(parseErr) {
-      return res.status(500).json({ error: 'JSON parse failed: ' + parseErr.message, raw: text.substring(0, 500) });
-    }
-
-    result.week_of     = data.week_of;
-    result.uploaded_at = new Date().toISOString();
-
-    return res.status(200).json({ ok: true, current: result, previous });
-
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+    const text = claude.content?.[0]?.text;
+    if (!text) throw new Error('Claude returned no content');
+    return parseClaudeResult(text);
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+function parseClaudeResult(value) {
+  const text = String(value).replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  const startIdx = text.indexOf('{');
+  if (startIdx === -1) throw new Error('Claude returned no JSON');
+  let depth = 0;
+  for (let index = startIdx; index < text.length; index++) {
+    if (text[index] === '{') depth++;
+    if (text[index] === '}') depth--;
+    if (depth === 0) return JSON.parse(text.substring(startIdx, index + 1));
+  }
+  throw new Error('Claude returned incomplete JSON');
+}
+
+function summaryToPrevious(summary) {
+  return {
+    week_of: summary.week_of,
+    membership: {
+      active_count: number(summary.active_count),
+      new_this_week: number(summary.new_this_week),
+      churned_this_week: number(summary.churned),
+      net_growth: number(summary.net_growth)
+    },
+    revenue: { mrr: number(summary.mrr) },
+    avg_founder_visits: number(summary.avg_visits),
+    health_summary: summary.health || {}
+  };
+}
+
+function buildCalculatedResult(data, historyWeeks) {
+  const active = number(data.active_count);
+  const joined = number(data.first_visit_count);
+  const churned = number(data.cancelled_count);
+  const flowNet = joined - churned;
+  const previous = historyWeeks.at(-1);
+  const previousActive = previous ? number(previous.active_count) : null;
+  const netGrowth = previousActive == null ? flowNet : active - previousActive;
+  const churnRate = active > 0 ? Math.round(churned / active * 1000) / 10 : 0;
+  const mrr = number(data.mrr);
+  const totalRevenue = number(data.total_weekly_revenue);
+  const nonAutopay = number(data.non_autopay_total);
+  const classData = Array.isArray(data.class_data) ? data.class_data : [];
+  const totalVisits = classData.reduce((sum, item) => sum + number(item.visits), 0);
+  const classesWithVisits = classData.filter(item => number(item.visits) > 0);
+  const classRow = item => ({ name: String(item.name || ''), visits: number(item.visits), fill_rate_pct: number(item.fill_rate_pct) });
+  const topClasses = [...classesWithVisits].sort((a, b) => number(b.visits) - number(a.visits)).slice(0, 3).map(classRow);
+  const bottomClasses = [...classesWithVisits].sort((a, b) => number(a.visits) - number(b.visits)).slice(0, 3).map(classRow);
+  const fillRates = classData.map(item => number(item.fill_rate_pct)).filter(value => value > 0);
+  const avgFillRate = fillRates.length ? Math.round(fillRates.reduce((sum, value) => sum + value, 0) / fillRates.length) : 0;
+  const failedCount = (data.failed_payments || []).length;
+  const urgentCount = ['never_visited', 'critical', 'lost']
+    .reduce((sum, key) => sum + (data.browser_dorian?.[key] || []).length, 0);
+  const movement = netGrowth > 0 ? `up ${netGrowth}` : netGrowth < 0 ? `down ${Math.abs(netGrowth)}` : 'flat';
+  const historicalGrowth = historyWeeks.map(item => number(item.net_growth));
+  const avgGrowth = Math.round(([...historicalGrowth, netGrowth].reduce((sum, value) => sum + value, 0) / (historicalGrowth.length + 1)) * 10) / 10;
+  const weeksToTarget = avgGrowth > 0 ? Math.ceil(Math.max(800 - active, 0) / avgGrowth) : null;
+  const projection = weeksToTarget == null
+    ? `At the current ${avgGrowth} net members per week, growth must improve before projecting 800 members.`
+    : `At the current ${avgGrowth} net members per week, 800 members is approximately ${weeksToTarget} weeks away.`;
+
+  return {
+    revenue: {
+      total_weekly: totalRevenue,
+      mrr,
+      mrr_pct: totalRevenue > 0 ? Math.round(mrr / totalRevenue * 100) : 0,
+      pack_and_class: nonAutopay,
+      revenue_per_member: active > 0 ? Math.round(totalRevenue / active) : 0,
+      arr_at_risk: 0
+    },
+    membership: {
+      active_count: active,
+      new_this_week: joined,
+      churned_this_week: churned,
+      net_growth: netGrowth,
+      other_status_changes: netGrowth - flowNet,
+      churn_rate_pct: churnRate,
+      retention_rate_pct: Math.round((100 - churnRate) * 10) / 10,
+      progress_to_800_pct: Math.round(active / 800 * 100),
+      failed_payment_count: failedCount
+    },
+    attendance: {
+      avg_fill_rate_pct: avgFillRate,
+      total_visits: totalVisits,
+      total_sessions: number(data.total_sessions),
+      avg_per_session: number(data.avg_per_session),
+      no_show_rate_pct: totalVisits > 0 ? Math.round(number(data.no_show_count) / totalVisits * 1000) / 10 : 0,
+      top_classes: topClasses,
+      bottom_classes: bottomClasses
+    },
+    dorian: data.browser_dorian || { critical: [], watch: [], lost: [], win_back: [] },
+    intelligence: {
+      headline: `Active membership is ${active}, ${movement} from the previous loaded week.`,
+      insight: `${joined} members joined and ${churned} churned this week. Average member visits were ${number(data.avg_founder_visits)} per week.`,
+      actions: [
+        failedCount ? `Recover ${failedCount} failed member payment${failedCount === 1 ? '' : 's'} this week.` : 'Review membership movement and confirm this week\'s growth owner.',
+        `Assign follow-up for ${urgentCount} urgent retention member${urgentCount === 1 ? '' : 's'}.`,
+        `Use the ${number(data.avg_per_session)} average attendance per session to prioritise class decisions.`
+      ],
+      risk: failedCount ? `${failedCount} failed payment${failedCount === 1 ? '' : 's'} require immediate recovery.` : `${urgentCount} members are currently in urgent retention follow-up.`,
+      bright_spot: `${active} active members generated ${mrr} in monthly recurring revenue.`
+    },
+    trends_intelligence: {
+      trend_summary: `Membership is ${movement} versus the previous loaded week, with an average of ${avgGrowth} net members across the available history.`,
+      churn_diagnosis: `${churned} members churned this week, a ${churnRate}% rate against active membership.`,
+      engagement_signal: `Average member visits are ${number(data.avg_founder_visits)} per week against a target of 3 or more.`,
+      projection,
+      trend_actions: [
+        { label: 'URGENT', action: `Complete outreach to ${urgentCount} urgent retention members.` },
+        { label: 'THIS WEEK', action: `Recover ${failedCount} failed payments and confirm outcomes.` },
+        { label: 'THIS MONTH', action: `Improve average visits from ${number(data.avg_founder_visits)} toward 3 per member per week.` }
+      ]
+    },
+    warnings: []
+  };
+}
+
+function number(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function buildPrompt(data, history) {

@@ -340,7 +340,7 @@ function renderUpload() {
         <div class="processing">
           <div class="processing-spinner"></div>
           <div class="processing-title">Analysing your data…</div>
-          <div class="processing-sub">Claude is reading the reports and building your dashboard.<br>This takes about 15–20 seconds.</div>
+          <div class="processing-sub">Reading the reports and building your dashboard.<br>Your calculated metrics will save even if the weekly briefing takes longer.</div>
         </div>
       </div>
     </div>`;
@@ -559,7 +559,10 @@ function reconcileMembershipSeries(weeks) {
     const churned = Number(week.membership.churned_this_week || 0);
     const flowNet = joined - churned;
     const previousActive = index > 0 ? Number(sorted[index - 1]?.membership?.active_count) : NaN;
-    if (Number.isFinite(previousActive)) {
+    const previousDate = index > 0 ? parseDateFlexible(sorted[index - 1]?.week_of) : null;
+    const currentDate = parseDateFlexible(week.week_of);
+    const isConsecutiveWeek = Boolean(previousDate && currentDate && Math.round((currentDate - previousDate) / 86400000) === 7);
+    if (Number.isFinite(previousActive) && isConsecutiveWeek) {
       const headcountDelta = activeCount - previousActive;
       week.membership.net_growth = headcountDelta;
       week.membership.other_status_changes = headcountDelta - flowNet;
@@ -2358,9 +2361,9 @@ async function processFiles() {
       headers: {'Content-Type':'application/json'},
       body:    JSON.stringify(browserData)
     });
-    const result = await res.json();
+    const result = await res.json().catch(() => ({ ok:false, error:'Processing returned an invalid response' }));
 
-    if (!result.ok) throw new Error(result.error || 'Process failed');
+    if (!res.ok || !result.ok) throw new Error(result.error || 'Process failed');
 
     const current = result.current;
 
@@ -2427,16 +2430,18 @@ async function processFiles() {
     // ─── FIX C: Mark this row as baseline-corrected ──
     current.baseline_corrected = true;
 
-    await fetch('/api/save', {
+    const saveRes = await fetch('/api/save', {
       method:  'POST',
       headers: {'Content-Type':'application/json'},
       body:    JSON.stringify({ week_of: current.week_of, data: current })
     });
+    const saveResult = await saveRes.json().catch(() => ({ ok:false, error:'Save returned an invalid response' }));
+    if (!saveRes.ok || !saveResult.ok) throw new Error(saveResult.error || 'The weekly upload could not be saved');
 
     state.allWeeksData = state.allWeeksData.filter(w => w.week_of !== current.week_of);
     state.allWeeksData.push(current);
     state.allWeeksData = reconcileMembershipSeries(state.allWeeksData);
-    state.weeks        = state.allWeeksData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
+    state.weeks        = upsertWeekManifest(state.weeks, { week_of: current.week_of, uploaded_at: current.uploaded_at || '' });
     state.selectedWeek = current.week_of;
     const newIdx       = state.allWeeksData.findIndex(w => w.week_of === current.week_of);
     const newPrevious  = newIdx > 0 ? state.allWeeksData[newIdx - 1] : null;
@@ -2635,16 +2640,85 @@ function renderTrends() {
     ${tableBlock}`;
 }
 
-function switchWeek(weekOf) {
-  if (state.selectedWeek === weekOf) return;
+function upsertWeekManifest(weeks, item) {
+  const latestByWeek = new Map();
+  [...(weeks || []), item].filter(w => w?.week_of).forEach(w => {
+    const existing = latestByWeek.get(w.week_of);
+    if (!existing || String(w.uploaded_at || '') >= String(existing.uploaded_at || '')) {
+      latestByWeek.set(w.week_of, w);
+    }
+  });
+  return [...latestByWeek.values()].sort((a,b) => a.week_of > b.week_of ? 1 : -1);
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchDashboardJSON(url, attempts = 2) {
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const response = await fetch(url, { cache:'no-store', headers:{'Accept':'application/json'} });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || data.message || 'Dashboard data is unavailable');
+      return data;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts - 1) await wait(900 * (attempt + 1));
+    }
+  }
+  throw lastError || new Error('Dashboard data is unavailable');
+}
+
+async function loadWeekRecord(weekOf) {
   const cached = state.allWeeksData.find(w => w.week_of === weekOf);
-  if (!cached) return;
-  const prevIdx = state.allWeeksData.findIndex(w => w.week_of === weekOf) - 1;
-  const previous = prevIdx >= 0 ? state.allWeeksData[prevIdx] : null;
-  state.dashData     = { current: cached, previous };
-  state.selectedWeek = weekOf;
-  state.tab          = 'overview';
-  render();
+  if (cached) return cached;
+  const result = await fetchDashboardJSON('/api/read?action=read_week&week_of=' + encodeURIComponent(weekOf));
+  if (!result.current) throw new Error('That week could not be loaded');
+  state.allWeeksData = reconcileMembershipSeries([
+    ...state.allWeeksData.filter(w => w.week_of !== weekOf),
+    result.current
+  ]);
+  return state.allWeeksData.find(w => w.week_of === weekOf) || result.current;
+}
+
+async function switchWeek(weekOf) {
+  if (state.selectedWeek === weekOf) return;
+  const previousSelection = state.selectedWeek;
+  const select = document.querySelector('.week-select');
+  if (select) select.disabled = true;
+  try {
+    const current = await loadWeekRecord(weekOf);
+    const manifestIndex = state.weeks.findIndex(w => w.week_of === weekOf);
+    const previousWeekOf = manifestIndex > 0 ? state.weeks[manifestIndex - 1].week_of : null;
+    let previous = previousWeekOf ? state.allWeeksData.find(w => w.week_of === previousWeekOf) : null;
+    if (previousWeekOf && !previous) {
+      try { previous = await loadWeekRecord(previousWeekOf); } catch {}
+    }
+    state.dashData = { current, previous: previous || null };
+    state.selectedWeek = weekOf;
+    state.tab = 'overview';
+    render();
+  } catch (error) {
+    alert(error.message || 'That week could not be loaded.');
+    const currentSelect = document.querySelector('.week-select');
+    if (currentSelect) currentSelect.value = previousSelection;
+  } finally {
+    const currentSelect = document.querySelector('.week-select');
+    if (currentSelect) currentSelect.disabled = false;
+  }
+}
+
+async function hydrateHistoryInBackground(weeks) {
+  const missing = [...(weeks || [])]
+    .reverse()
+    .filter(w => !state.allWeeksData.some(loaded => loaded.week_of === w.week_of));
+  for (const week of missing) {
+    if (state.freshUpload) return;
+    try { await loadWeekRecord(week.week_of); } catch {}
+  }
+  if (!state.freshUpload && (state.tab === 'trends' || state.tab === 'chat')) render();
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────
@@ -2653,13 +2727,8 @@ async function init() {
   render();
 
   try {
-    const latestResult = await fetch('/api/read?action=read_latest').then(r => r.json());
-
-    if (!latestResult.ok || !latestResult.current) {
-      state.view = 'empty';
-      render();
-      return;
-    }
+    const latestResult = await fetchDashboardJSON('/api/read?action=read_latest');
+    if (!latestResult.current) throw new Error('No dashboard data found');
 
     let allData0 = [];
     if (latestResult.previous) allData0.push(latestResult.previous);
@@ -2676,41 +2745,23 @@ async function init() {
     render();
 
     try {
-      const weeksData = await fetch('/api/read?action=read_weeks').then(r => r.json());
-      const latestManifestByWeek = new Map();
-      (weeksData.weeks || []).forEach(w => {
-        const existing = latestManifestByWeek.get(w.week_of);
-        if (!existing || String(w.uploaded_at || '') > String(existing.uploaded_at || '')) {
-          latestManifestByWeek.set(w.week_of, w);
+      const weeksData = await fetchDashboardJSON('/api/read?action=read_weeks');
+      const manifestWeeks = (weeksData.weeks || []).reduce((weeks, week) => upsertWeekManifest(weeks, week), []);
+      if (manifestWeeks.length) state.weeks = manifestWeeks;
+
+      const manifestLatest = state.weeks.at(-1)?.week_of;
+      if (manifestLatest && manifestLatest !== state.selectedWeek && !state.freshUpload) {
+        const trueLatest = await loadWeekRecord(manifestLatest);
+        const previousWeekOf = state.weeks.length > 1 ? state.weeks[state.weeks.length - 2].week_of : null;
+        let truePrevious = previousWeekOf ? state.allWeeksData.find(w => w.week_of === previousWeekOf) : null;
+        if (previousWeekOf && !truePrevious) {
+          try { truePrevious = await loadWeekRecord(previousWeekOf); } catch {}
         }
-      });
-      const weeks = [...latestManifestByWeek.values()].sort((a,b) => a.week_of > b.week_of ? 1 : -1);
-      const allData = [];
-      for (const w of weeks) {
-        if (w.week_of === latestResult.current.week_of) {
-          allData.push(latestResult.current);
-          continue;
-        }
-        try {
-          const r = await fetch('/api/read?action=read_week&week_of=' + encodeURIComponent(w.week_of)).then(r => r.json());
-          if (r.ok && r.current) allData.push(r.current);
-        } catch {}
-      }
-      if (allData.length && !state.freshUpload) {
-        state.allWeeksData = reconcileMembershipSeries(allData);
-        state.weeks        = state.allWeeksData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
-        const trueLatest = state.allWeeksData[state.allWeeksData.length - 1];
-        const trueIdx    = state.allWeeksData.length - 1;
-        state.dashData   = { current: trueLatest, previous: trueIdx > 0 ? state.allWeeksData[trueIdx-1] : null };
+        state.dashData = { current: trueLatest, previous: truePrevious || null };
         state.selectedWeek = trueLatest.week_of;
-        render();
-      } else if (allData.length && state.freshUpload) {
-        const freshWeek = state.dashData?.current?.week_of;
-        const merged = allData.map(w => w.week_of === freshWeek ? state.dashData.current : w);
-        if (!merged.find(w => w.week_of === freshWeek)) merged.push(state.dashData.current);
-        state.allWeeksData = reconcileMembershipSeries(merged);
-        state.weeks        = state.allWeeksData.map(w => ({ week_of: w.week_of, uploaded_at: w.uploaded_at || '' }));
       }
+      render();
+      hydrateHistoryInBackground(state.weeks).catch(() => {});
     } catch {}
 
   } catch(e) {
